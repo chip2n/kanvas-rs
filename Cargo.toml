@@ -1,9 +1,13 @@
 [package]
 name = "kanvas-rs"
 version = "0.1.0"
-authors = ["Andreas Arvidsson <andreas.arvidson@gmail.com>"]
+authors = ["Andreas Arvidsson <andreas@arvidsson.io>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Rust library for creating beautiful graphics via WebGPU"
+documentation = "https://docs.rs/kanvas"
+repository = "https://github.com/chip2n/kanvas-rs"
+homepage = "https://github.com/chip2n/kanvas-rs"
+license = "MIT/Apache-2.0"
+readme = "README.org"
 
 [dependencies]
