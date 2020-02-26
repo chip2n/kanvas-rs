@@ -11,3 +11,7 @@ license = "MIT/Apache-2.0"
 readme = "README.md"
 
 [dependencies]
+winit = "0.20"
+wgpu = "0.4"
+glsl-to-spirv = "0.1"
+image = "0.23.0"
