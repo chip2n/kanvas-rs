@@ -1,13 +1,5 @@
 use winit::event::*;
 
-#[rustfmt::skip]
-const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.0,
-    0.0, 0.0, 0.5, 1.0,
-);
-
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
@@ -37,7 +29,7 @@ impl Camera {
         // Wraps the scene to give the effect of depth
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        OPENGL_TO_WGPU_MATRIX * proj * view
+        proj * view
     }
 }
 

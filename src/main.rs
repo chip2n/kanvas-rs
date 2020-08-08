@@ -2,12 +2,37 @@ mod camera;
 mod texture;
 mod uniform;
 
+use cgmath::prelude::*;
 use futures::executor::block_on;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+
+#[rustfmt::skip]
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [-0.0868241,  -0.49240386, 0.0], tex_coords: [1.0 - 0.4131759,    1.0 - 0.00759614] },  // A
+    Vertex { position: [-0.49513406, -0.06958647, 0.0], tex_coords: [1.0 - 0.0048659444, 1.0 - 0.43041354] },  // B
+    Vertex { position: [-0.21918549,  0.44939706, 0.0], tex_coords: [1.0 - 0.28081453,   1.0 - 0.949397057] }, // C
+    Vertex { position: [ 0.35966998,  0.3473291,  0.0], tex_coords: [1.0 - 0.85967,      1.0 - 0.84732911] },  // D
+    Vertex { position: [ 0.44147372, -0.2347359,  0.0], tex_coords: [1.0 - 0.9414737,    1.0 - 0.2652641] },   // E
+];
+
+#[rustfmt::skip]
+const INDICES: &[u16] = &[
+    0, 1, 4,
+    1, 2, 4,
+    2, 3, 4,
+];
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -46,21 +71,28 @@ impl Vertex {
     }
 }
 
-#[rustfmt::skip]
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241,  -0.49240386, 0.0], tex_coords: [1.0 - 0.4131759,    1.0 - 0.00759614] },  // A
-    Vertex { position: [-0.49513406, -0.06958647, 0.0], tex_coords: [1.0 - 0.0048659444, 1.0 - 0.43041354] },  // B
-    Vertex { position: [-0.21918549,  0.44939706, 0.0], tex_coords: [1.0 - 0.28081453,   1.0 - 0.949397057] }, // C
-    Vertex { position: [ 0.35966998,  0.3473291,  0.0], tex_coords: [1.0 - 0.85967,      1.0 - 0.84732911] },  // D
-    Vertex { position: [ 0.44147372, -0.2347359,  0.0], tex_coords: [1.0 - 0.9414737,    1.0 - 0.2652641] },   // E
-];
+struct Instance {
+    position: cgmath::Vector3<f32>,
+    rotation: cgmath::Quaternion<f32>,
+}
 
-#[rustfmt::skip]
-const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
-];
+impl Instance {
+    fn to_raw(&self) -> InstanceRaw {
+        InstanceRaw {
+            model: cgmath::Matrix4::from_translation(self.position)
+                * cgmath::Matrix4::from(self.rotation),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct InstanceRaw {
+    model: cgmath::Matrix4<f32>,
+}
+
+unsafe impl bytemuck::Pod for InstanceRaw {}
+unsafe impl bytemuck::Zeroable for InstanceRaw {}
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -124,6 +156,9 @@ struct State {
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
+    depth_texture: texture::Texture,
 }
 
 impl State {
@@ -237,8 +272,87 @@ impl State {
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
         let camera_controller = camera::CameraController::new(0.2);
 
-        let (uniforms, uniform_buffer, uniform_bind_group_layout, uniform_bind_group) =
-            uniform::make_uniform_buffer(&camera, &device);
+        let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: x as f32,
+                        y: 0.0,
+                        z: z as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = if position.is_zero() {
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(
+                            position.clone().normalize(),
+                            cgmath::Deg(45.0),
+                        )
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer_size =
+            instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
+        let instance_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&instance_data),
+            wgpu::BufferUsage::STORAGE_READ,
+        );
+
+        let mut uniforms = uniform::Uniforms::new();
+        uniforms.update_view_proj(&camera);
+        let uniform_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&[uniforms]),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                bindings: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: true,
+                        },
+                    },
+                ],
+                label: Some("uniform_bind_group_layout"),
+            });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            bindings: &[
+                wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &uniform_buffer,
+                        range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
+                    },
+                },
+                wgpu::Binding {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &instance_buffer,
+                        range: 0..instance_buffer_size as wgpu::BufferAddress,
+                    },
+                },
+            ],
+            label: Some("uniform_bind_group"),
+        });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -271,7 +385,15 @@ impl State {
                 write_mask: wgpu::ColorWrite::ALL,
             }],
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            depth_stencil_state: None,
+            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
+                stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
+                stencil_read_mask: 0,
+                stencil_write_mask: 0,
+            }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
                 vertex_buffers: &[Vertex::desc()],
@@ -288,6 +410,9 @@ impl State {
         let index_buffer =
             device.create_buffer_with_data(bytemuck::cast_slice(INDICES), wgpu::BufferUsage::INDEX);
         let num_indices = INDICES.len() as u32;
+
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         State {
             surface,
@@ -309,6 +434,9 @@ impl State {
             uniforms,
             uniform_buffer,
             uniform_bind_group,
+            instances,
+            instance_buffer,
+            depth_texture,
         }
     }
 
@@ -317,6 +445,7 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+        self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -367,8 +496,8 @@ impl State {
             });
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // where we're going to draw our color to
+            // clear the screen
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
@@ -383,13 +512,40 @@ impl State {
                 }],
                 depth_stencil_attachment: None,
             });
+        }
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                // where we're going to draw our color to
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    load_op: wgpu::LoadOp::Load, // prevent clearing after each draw
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    },
+                }],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.depth_texture.view,
+                    depth_load_op: wgpu::LoadOp::Clear,
+                    depth_store_op: wgpu::StoreOp::Store,
+                    clear_depth: 1.0,
+                    stencil_load_op: wgpu::LoadOp::Clear,
+                    stencil_store_op: wgpu::StoreOp::Store,
+                    clear_stencil: 0,
+                }),
+            });
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
             render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..NUM_INSTANCES);
         }
 
         self.queue.submit(&[encoder.finish()]);
