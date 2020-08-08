@@ -1,4 +1,5 @@
 use image::GenericImageView;
+use std::path::Path;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -8,6 +9,16 @@ pub struct Texture {
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+    pub fn load<P: AsRef<Path>>(
+        device: &wgpu::Device,
+        path: P,
+    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
+        let path_copy = path.as_ref().to_path_buf();
+        let label = path_copy.to_str();
+        let img = image::open(path)?;
+        Self::from_image(device, &img, label)
+    }
 
     pub fn create_depth_texture(
         device: &wgpu::Device,
@@ -56,18 +67,18 @@ impl Texture {
     pub fn from_bytes(
         device: &wgpu::Device,
         bytes: &[u8],
+        label: Option<&str>,
     ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, &img)
+        Self::from_image(device, &img, label)
     }
 
     pub fn from_image(
         device: &wgpu::Device,
         img: &image::DynamicImage,
+        label: Option<&str>,
     ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
-        let rgba = img.as_rgba8().ok_or(anyhow::anyhow!(
-            "Unable to create reference to 8bit RGBA image"
-        ))?;
+        let rgba = img.to_rgba();
         let dimensions = img.dimensions();
 
         // All textures are stored as 3d
@@ -85,7 +96,7 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: Some("diffuse_texture"),
+            label,
         });
 
         let buffer = device.create_buffer_with_data(&rgba, wgpu::BufferUsage::COPY_SRC);

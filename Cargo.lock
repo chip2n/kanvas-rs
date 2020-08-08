@@ -743,6 +743,7 @@ dependencies = [
  "futures",
  "image",
  "shaderc",
+ "tobj",
  "wgpu",
  "winit",
 ]
@@ -1499,6 +1500,12 @@ dependencies = [
  "lzw",
  "miniz_oxide",
 ]
+
+[[package]]
+name = "tobj"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b9d0bafde95a2f8f50dd3c10bc127b462efa8c3c0b60dfa276b7e032100e21d"
 
 [[package]]
 name = "unicode-xid"
