@@ -20,11 +20,16 @@ unsafe impl bytemuck::Pod for Vertex {}
 unsafe impl bytemuck::Zeroable for Vertex {}
 
 impl Vertex {
+    /// Defines how vertices are laid out in memory
     fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a> {
         use std::mem;
         wgpu::VertexBufferDescriptor {
+            // how wide a vertex is (shader skips this number of bytes to get to the next one)
             stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
+
+            // how often shader should move to the next vertex (e.g. for instancing)
             step_mode: wgpu::InputStepMode::Vertex,
+
             attributes: &[
                 wgpu::VertexAttributeDescriptor {
                     offset: 0,
@@ -43,11 +48,11 @@ impl Vertex {
 
 #[rustfmt::skip]
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, -0.49240386, 0.0], tex_coords: [1.0 - 0.4131759, 1.0 - 0.00759614] }, // A
-    Vertex { position: [-0.49513406, -0.06958647, 0.0], tex_coords: [1.0 - 0.0048659444, 1.0 - 0.43041354] }, // B
-    Vertex { position: [-0.21918549, 0.44939706, 0.0], tex_coords: [1.0 - 0.28081453, 1.0 - 0.949397057] }, // C
-    Vertex { position: [0.35966998, 0.3473291, 0.0], tex_coords: [1.0 - 0.85967, 1.0 - 0.84732911] }, // D
-    Vertex { position: [0.44147372, -0.2347359, 0.0], tex_coords: [1.0 - 0.9414737, 1.0 - 0.2652641] }, // E
+    Vertex { position: [-0.0868241,  -0.49240386, 0.0], tex_coords: [1.0 - 0.4131759,    1.0 - 0.00759614] },  // A
+    Vertex { position: [-0.49513406, -0.06958647, 0.0], tex_coords: [1.0 - 0.0048659444, 1.0 - 0.43041354] },  // B
+    Vertex { position: [-0.21918549,  0.44939706, 0.0], tex_coords: [1.0 - 0.28081453,   1.0 - 0.949397057] }, // C
+    Vertex { position: [ 0.35966998,  0.3473291,  0.0], tex_coords: [1.0 - 0.85967,      1.0 - 0.84732911] },  // D
+    Vertex { position: [ 0.44147372, -0.2347359,  0.0], tex_coords: [1.0 - 0.9414737,    1.0 - 0.2652641] },   // E
 ];
 
 #[rustfmt::skip]
@@ -145,8 +150,8 @@ impl State {
             .await;
 
         let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT, // write to the screen
+            format: wgpu::TextureFormat::Bgra8UnormSrgb, // how the textures will be stored on the gpu
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -154,10 +159,13 @@ impl State {
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
         let diffuse_bytes = include_bytes!("happy-tree.png");
-        let (diffuse_texture, cmd_buffer) = texture::Texture::from_bytes(&device, diffuse_bytes);
+        let (diffuse_texture, cmd_buffer) =
+            texture::Texture::from_bytes(&device, diffuse_bytes).unwrap();
 
         queue.submit(&[cmd_buffer]);
 
+        // A BindGroup describes a set of resources and how they can be accessed by a shader.
+        // We create a BindGroup using a BindGroupLayout.
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[
@@ -179,6 +187,9 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
+        // A BindGroup is a more specific declaration of the BindGroupLayout.
+        // The reason why these are separate is to allow us to swap out BindGroups on the fly,
+        // so long as they all share the same BindGroupLayout.
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             bindings: &[
@@ -244,6 +255,7 @@ impl State {
                 module: &fs_module,
                 entry_point: "main",
             }),
+            // description of how to process triangles
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::Back,
@@ -251,6 +263,7 @@ impl State {
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
             }),
+            // description on how color are stored and processed throughout the pipeline
             color_states: &[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
@@ -341,10 +354,12 @@ impl State {
     }
 
     fn render(&mut self) {
+        // Get a frame to render to
         let frame = self
             .swap_chain
             .get_next_texture()
             .expect("Timeout getting texture");
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -353,6 +368,7 @@ impl State {
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                // where we're going to draw our color to
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,

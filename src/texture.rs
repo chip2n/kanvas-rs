@@ -7,18 +7,25 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn from_bytes(device: &wgpu::Device, bytes: &[u8]) -> (Self, wgpu::CommandBuffer) {
-        let img = image::load_from_memory(bytes).unwrap();
+    pub fn from_bytes(
+        device: &wgpu::Device,
+        bytes: &[u8],
+    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
+        let img = image::load_from_memory(bytes)?;
         Self::from_image(device, &img)
     }
 
     pub fn from_image(
         device: &wgpu::Device,
         img: &image::DynamicImage,
-    ) -> (Self, wgpu::CommandBuffer) {
-        let rgba = img.as_rgba8().unwrap();
+    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
+        let rgba = img.as_rgba8().ok_or(anyhow::anyhow!(
+            "Unable to create reference to 8bit RGBA image"
+        ))?;
         let dimensions = img.dimensions();
 
+        // All textures are stored as 3d
+        // We represent our 2d texture by setting depth of 1
         let size = wgpu::Extent3d {
             width: dimensions.0,
             height: dimensions.1,
@@ -71,13 +78,13 @@ impl Texture {
             compare: wgpu::CompareFunction::Always,
         });
 
-        (
+        Ok((
             Self {
                 texture,
                 view,
                 sampler,
             },
             cmd_buffer,
-        )
+        ))
     }
 }
