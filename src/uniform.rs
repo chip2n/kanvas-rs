@@ -1,4 +1,4 @@
-use crate::camera;
+use crate::camera2;
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -27,8 +27,8 @@ impl Uniforms {
         }
     }
 
-    pub fn update_view_proj(&mut self, camera: &camera::Camera) {
-        self.view_position = camera.eye.to_homogeneous();
-        self.view_proj = OPENGL_TO_WGPU_MATRIX * camera.build_view_projection_matrix();
+    pub fn update_view_proj(&mut self, camera: &camera2::Camera, projection: &camera2::Projection) {
+        self.view_position = camera.position.to_homogeneous();
+        self.view_proj = projection.calc_matrix() * camera.calc_matrix();
     }
 }

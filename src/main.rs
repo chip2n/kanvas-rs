@@ -1,4 +1,5 @@
 mod camera;
+mod camera2;
 mod light;
 mod model;
 mod texture;
@@ -8,6 +9,7 @@ use cgmath::prelude::*;
 use futures::executor::block_on;
 use model::Vertex;
 use winit::{
+    dpi::PhysicalPosition,
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
@@ -42,6 +44,7 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut state = block_on(State::new(&window));
+    let mut last_render_time = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
@@ -70,7 +73,10 @@ fn main() {
             }
         }
         Event::RedrawRequested(_) => {
-            state.update();
+            let now = std::time::Instant::now();
+            let dt = now - last_render_time;
+            last_render_time = now;
+            state.update(dt);
             state.render();
         }
         Event::MainEventsCleared => {
@@ -90,8 +96,11 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     light_render_pipeline: wgpu::RenderPipeline,
     size: winit::dpi::PhysicalSize<u32>,
-    camera: camera::Camera,
-    camera_controller: camera::CameraController,
+    camera: camera2::Camera,
+    projection: camera2::Projection,
+    camera_controller: camera2::CameraController,
+    last_mouse_pos: PhysicalPosition<f64>,
+    mouse_pressed: bool,
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
@@ -174,8 +183,10 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
-        let camera_controller = camera::CameraController::new(0.2);
+        let camera = camera2::Camera::new((0.0, 0.5, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let projection =
+            camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
+        let camera_controller = camera2::CameraController::new(4.0, 0.4);
 
         const SPACE_BETWEEN: f32 = 3.0;
         let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
@@ -211,7 +222,7 @@ impl State {
         );
 
         let mut uniforms = uniform::Uniforms::new();
-        uniforms.update_view_proj(&camera);
+        uniforms.update_view_proj(&camera, &projection);
         let uniform_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(&[uniforms]),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
@@ -383,7 +394,10 @@ impl State {
             light_render_pipeline,
             size,
             camera,
+            projection,
             camera_controller,
+            last_mouse_pos: (0.0, 0.0).into(),
+            mouse_pressed: false,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -405,15 +419,50 @@ impl State {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         self.depth_texture =
             texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
+
+        self.projection.resize(new_size.width, new_size.height);
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event)
+        match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(delta);
+                true
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let mouse_dx = position.x as f64 - self.last_mouse_pos.x;
+                let mouse_dy = position.y as f64 - self.last_mouse_pos.y;
+                self.last_mouse_pos = (*position).cast::<f64>();
+                if self.mouse_pressed {
+                    self.camera_controller.process_mouse(mouse_dx, mouse_dy);
+                }
+                true
+            }
+            _ => false,
+        }
     }
 
-    fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.uniforms.update_view_proj(&self.camera);
+    fn update(&mut self, dt: std::time::Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.uniforms
+            .update_view_proj(&self.camera, &self.projection);
 
         // Copy operations are performed on the gpu, so we'll need
         // a CommandEncoder for that
@@ -438,9 +487,10 @@ impl State {
 
         // Update the light
         let old_position = self.light.position;
-        self.light.position =
-            cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
-                * old_position;
+        self.light.position = cgmath::Quaternion::from_axis_angle(
+            (0.0, 1.0, 0.0).into(),
+            cgmath::Deg(60.0 * dt.as_secs_f32()),
+        ) * old_position;
         let staging_buffer = self.device.create_buffer_with_data(
             bytemuck::cast_slice(&[self.light]),
             wgpu::BufferUsage::COPY_SRC,
