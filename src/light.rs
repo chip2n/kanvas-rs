@@ -1,5 +1,5 @@
-use std::ops::Range;
 use crate::model;
+use std::ops::Range;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -55,7 +55,10 @@ where
     );
 }
 
-impl<'a, 'b> DrawLight<'a, 'b> for wgpu::RenderPass<'a> where 'b: 'a, {
+impl<'a, 'b> DrawLight<'a, 'b> for wgpu::RenderPass<'a>
+where
+    'b: 'a,
+{
     fn draw_light_mesh(
         &mut self,
         mesh: &'b model::Mesh,

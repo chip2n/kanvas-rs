@@ -90,8 +90,6 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     light_render_pipeline: wgpu::RenderPipeline,
     size: winit::dpi::PhysicalSize<u32>,
-    diffuse_texture: texture::Texture,
-    diffuse_bind_group: wgpu::BindGroup,
     camera: camera::Camera,
     camera_controller: camera::CameraController,
     uniforms: uniform::Uniforms,
@@ -138,12 +136,6 @@ impl State {
         };
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let (diffuse_texture, cmd_buffer) =
-            texture::Texture::from_bytes(&device, diffuse_bytes, Some("diffuse_texture")).unwrap();
-
-        queue.submit(&[cmd_buffer]);
-
         // A BindGroup describes a set of resources and how they can be accessed by a shader.
         // We create a BindGroup using a BindGroupLayout.
         let texture_bind_group_layout =
@@ -163,27 +155,23 @@ impl State {
                         visibility: wgpu::ShaderStage::FRAGMENT,
                         ty: wgpu::BindingType::Sampler { comparison: false },
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            component_type: wgpu::TextureComponentType::Float,
+                            dimension: wgpu::TextureViewDimension::D2,
+                        },
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                    },
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        // A BindGroup is a more specific declaration of the BindGroupLayout.
-        // The reason why these are separate is to allow us to swap out BindGroups on the fly,
-        // so long as they all share the same BindGroupLayout.
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::Binding {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
         let camera_controller = camera::CameraController::new(0.2);
@@ -361,8 +349,6 @@ impl State {
             render_pipeline,
             light_render_pipeline,
             size,
-            diffuse_texture,
-            diffuse_bind_group,
             camera,
             camera_controller,
             uniforms,
