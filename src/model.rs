@@ -101,6 +101,48 @@ pub struct Material {
     pub bind_group: wgpu::BindGroup,
 }
 
+impl Material {
+    pub fn new(
+        device: &wgpu::Device,
+        name: &str,
+        diffuse_texture: texture::Texture,
+        normal_texture: texture::Texture,
+        layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        // A BindGroup is a more specific declaration of the BindGroupLayout.
+        // The reason why these are separate is to allow us to swap out BindGroups on the fly,
+        // so long as they all share the same BindGroupLayout.
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            bindings: &[
+                wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                },
+                wgpu::Binding {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                },
+                wgpu::Binding {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&normal_texture.view),
+                },
+                wgpu::Binding {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
+                },
+            ],
+            label: None,
+        });
+        Self {
+            name: String::from(name),
+            diffuse_texture,
+            normal_texture,
+            bind_group,
+        }
+    }
+}
+
 pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
@@ -139,38 +181,13 @@ impl Model {
                 texture::Texture::load(device, containing_folder.join(normal_path?), true)?;
             command_buffers.push(cmds);
 
-            // A BindGroup is a more specific declaration of the BindGroupLayout.
-            // The reason why these are separate is to allow us to swap out BindGroups on the fly,
-            // so long as they all share the same BindGroupLayout.
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout,
-                bindings: &[
-                    wgpu::Binding {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                    },
-                    wgpu::Binding {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                    },
-                    wgpu::Binding {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-                    },
-                    wgpu::Binding {
-                        binding: 3,
-                        resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-                    },
-                ],
-                label: None,
-            });
-
-            materials.push(Material {
-                name: mat.name,
+            materials.push(Material::new(
+                device,
+                &mat.name,
                 diffuse_texture,
                 normal_texture,
-                bind_group,
-            });
+                layout,
+            ));
         }
 
         let mut meshes = Vec::new();
