@@ -34,6 +34,14 @@ where
         uniforms: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
+    fn draw_model_instanced_with_material(
+        &mut self,
+        model: &'b Model,
+        material: &'b Material,
+        instances: Range<u32>,
+        uniforms: &'b wgpu::BindGroup,
+        light: &'b wgpu::BindGroup,
+    );
 }
 
 impl<'a, 'b> DrawModel<'a, 'b> for wgpu::RenderPass<'a>
@@ -84,6 +92,19 @@ where
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
+            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, light);
+        }
+    }
+
+    fn draw_model_instanced_with_material(
+        &mut self,
+        model: &'b Model,
+        material: &'b Material,
+        instances: Range<u32>,
+        uniforms: &'b wgpu::BindGroup,
+        light: &'b wgpu::BindGroup,
+    ) {
+        for mesh in &model.meshes {
             self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, light);
         }
     }

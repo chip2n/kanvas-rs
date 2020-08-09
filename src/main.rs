@@ -102,6 +102,7 @@ struct State {
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
+    debug_material: model::Material,
 }
 
 impl State {
@@ -339,6 +340,38 @@ impl State {
         .unwrap();
         queue.submit(&cmds);
 
+        let debug_material = {
+            let diffuse_bytes = include_bytes!("res/cobble-diffuse.png");
+            let normal_bytes = include_bytes!("res/cobble-normal.png");
+
+            let mut command_buffers = vec![];
+            let (diffuse_texture, cmds) = texture::Texture::from_bytes(
+                &device,
+                diffuse_bytes,
+                Some("res/cobble-diffuse.png"),
+                false,
+            )
+            .unwrap();
+            command_buffers.push(cmds);
+            let (normal_texture, cmds) = texture::Texture::from_bytes(
+                &device,
+                normal_bytes,
+                Some("res/cobble-normal.png"),
+                true,
+            )
+            .unwrap();
+            command_buffers.push(cmds);
+            queue.submit(&command_buffers);
+
+            model::Material::new(
+                &device,
+                "debug-material",
+                diffuse_texture,
+                normal_texture,
+                &texture_bind_group_layout,
+            )
+        };
+
         State {
             surface,
             adapter,
@@ -361,6 +394,7 @@ impl State {
             light,
             light_buffer,
             light_bind_group,
+            debug_material,
         }
     }
 
@@ -485,8 +519,9 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
 
             use model::DrawModel;
-            render_pass.draw_model_instanced(
+            render_pass.draw_model_instanced_with_material(
                 &self.obj_model,
+                &self.debug_material,
                 0..self.instances.len() as u32,
                 &self.uniform_bind_group,
                 &self.light_bind_group,
