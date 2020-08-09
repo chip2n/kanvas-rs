@@ -128,14 +128,15 @@ impl Model {
         for mat in obj_materials {
             let diffuse_path = mat.diffuse_texture;
             let (diffuse_texture, cmds) =
-                texture::Texture::load(&device, containing_folder.join(diffuse_path))?;
+                texture::Texture::load(&device, containing_folder.join(diffuse_path), false)?;
             command_buffers.push(cmds);
 
             let normal_path = match mat.unknown_param.get("map_Bump") {
                 Some(v) => Ok(v),
                 None => Err(anyhow::anyhow!("Unable to find normal map")),
             };
-            let (normal_texture, cmds) = texture::Texture::load(device, containing_folder.join(normal_path?))?;
+            let (normal_texture, cmds) =
+                texture::Texture::load(device, containing_folder.join(normal_path?), true)?;
             command_buffers.push(cmds);
 
             // A BindGroup is a more specific declaration of the BindGroupLayout.
@@ -181,13 +182,15 @@ impl Model {
                         m.mesh.positions[i * 3],
                         m.mesh.positions[i * 3 + 1],
                         m.mesh.positions[i * 3 + 2],
-                    ].into(),
+                    ]
+                    .into(),
                     tex_coords: [m.mesh.texcoords[i * 2], m.mesh.texcoords[i * 2 + 1]].into(),
                     normal: [
                         m.mesh.normals[i * 3],
                         m.mesh.normals[i * 3 + 1],
                         m.mesh.normals[i * 3 + 2],
-                    ].into(),
+                    ]
+                    .into(),
                     tangent: [0.0; 3].into(),
                     bitangent: [0.0; 3].into(),
                 });
@@ -225,7 +228,7 @@ impl Model {
                 //     delta_pos2 = delta_uv2.x * T + delta_uv2.y * B
                 // Luckily, the place I found this equation provided
                 // the solution!
-                let r = 1.0 / (delta_uv1 .x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
+                let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
                 let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
                 let bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * r;
 
