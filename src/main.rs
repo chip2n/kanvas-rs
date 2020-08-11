@@ -14,29 +14,6 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-}
-
-impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
-            model: cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-struct InstanceRaw {
-    model: cgmath::Matrix4<f32>,
-}
-
-unsafe impl bytemuck::Pod for InstanceRaw {}
-unsafe impl bytemuck::Zeroable for InstanceRaw {}
-
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
@@ -103,7 +80,7 @@ struct State {
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    instances: Vec<Instance>,
+    instances: Vec<model::Instance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
     obj_model: model::Model,
@@ -188,7 +165,7 @@ impl State {
             camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera2::CameraController::new(4.0, 0.8);
 
-        let instances = vec![Instance {
+        let instances = vec![model::Instance {
             position: cgmath::Vector3 {
                 x: 0.0,
                 y: 0.0,
@@ -199,7 +176,7 @@ impl State {
                 cgmath::Deg(0.0),
             ),
         }];
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_data = instances.iter().map(model::Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer_size =
             instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
         let instance_buffer = device.create_buffer_with_data(
