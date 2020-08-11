@@ -14,8 +14,6 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-const NUM_INSTANCES_PER_ROW: u32 = 10;
-
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
@@ -109,10 +107,10 @@ struct State {
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
     obj_model: model::Model,
+    light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
-    debug_material: model::Material,
 }
 
 impl State {
@@ -190,31 +188,17 @@ impl State {
             camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera2::CameraController::new(4.0, 0.8);
 
-        const SPACE_BETWEEN: f32 = 3.0;
-        let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
-
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(
-                            position.clone().normalize(),
-                            cgmath::Deg(45.0),
-                        )
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect();
-
+        let instances = vec![Instance {
+            position: cgmath::Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation: cgmath::Quaternion::from_axis_angle(
+                cgmath::Vector3::unit_z(),
+                cgmath::Deg(0.0),
+            ),
+        }];
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer_size =
             instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
@@ -271,7 +255,7 @@ impl State {
             label: Some("uniform_bind_group"),
         });
 
-        let light = light::Light::new((2.0, 2.0, 2.0).into(), (1.0, 1.0, 1.0).into());
+        let light = light::Light::new((4.0, 10.0, 4.0).into(), (1.0, 1.0, 1.0).into());
 
         // We'll want to update our lights position, so we use COPY_DST
         let light_buffer = device.create_buffer_with_data(
@@ -345,45 +329,14 @@ impl State {
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
-        let (obj_model, cmds) = model::Model::load(
-            &device,
-            &texture_bind_group_layout,
-            "/home/chip/git/kanvas-rs/src/res/cube.obj",
-        )
-        .unwrap();
+        let (obj_model, cmds) =
+            model::Model::load(&device, &texture_bind_group_layout, "res/models/table.obj")
+                .unwrap();
         queue.submit(&cmds);
 
-        let debug_material = {
-            let diffuse_bytes = include_bytes!("res/cobble-diffuse.png");
-            let normal_bytes = include_bytes!("res/cobble-normal.png");
-
-            let mut command_buffers = vec![];
-            let (diffuse_texture, cmds) = texture::Texture::from_bytes(
-                &device,
-                diffuse_bytes,
-                Some("res/cobble-diffuse.png"),
-                false,
-            )
-            .unwrap();
-            command_buffers.push(cmds);
-            let (normal_texture, cmds) = texture::Texture::from_bytes(
-                &device,
-                normal_bytes,
-                Some("res/cobble-normal.png"),
-                true,
-            )
-            .unwrap();
-            command_buffers.push(cmds);
-            queue.submit(&command_buffers);
-
-            model::Material::new(
-                &device,
-                "debug-material",
-                diffuse_texture,
-                normal_texture,
-                &texture_bind_group_layout,
-            )
-        };
+        let (light_model, cmds) =
+            model::Model::load(&device, &texture_bind_group_layout, "res/models/cube.obj").unwrap();
+        queue.submit(&cmds);
 
         State {
             window,
@@ -406,10 +359,10 @@ impl State {
             instance_buffer,
             depth_texture,
             obj_model,
+            light_model,
             light,
             light_buffer,
             light_bind_group,
-            debug_material,
         }
     }
 
@@ -597,9 +550,8 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
 
             use model::DrawModel;
-            render_pass.draw_model_instanced_with_material(
+            render_pass.draw_model_instanced(
                 &self.obj_model,
-                &self.debug_material,
                 0..self.instances.len() as u32,
                 &self.uniform_bind_group,
                 &self.light_bind_group,
@@ -609,7 +561,7 @@ impl State {
 
             use light::DrawLight;
             render_pass.draw_light_model(
-                &self.obj_model,
+                &self.light_model,
                 &self.uniform_bind_group,
                 &self.light_bind_group,
             );
