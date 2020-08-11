@@ -75,6 +75,7 @@ pub struct CameraController {
     amount_down: f32,
     rotate_horizontal: f32,
     rotate_vertical: f32,
+    pub is_active: bool,
     scroll: f32,
     speed: f32,
     sensitivity: f32,
@@ -91,6 +92,7 @@ impl CameraController {
             amount_down: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
+            is_active: false,
             scroll: 0.0,
             speed,
             sensitivity,
@@ -108,7 +110,7 @@ impl CameraController {
                 self.amount_forward = amount;
                 true
             }
-            VirtualKeyCode::S | VirtualKeyCode::Down => {
+            VirtualKeyCode::R | VirtualKeyCode::Down => {
                 self.amount_backward = amount;
                 true
             }
@@ -116,7 +118,7 @@ impl CameraController {
                 self.amount_left = amount;
                 true
             }
-            VirtualKeyCode::D | VirtualKeyCode::Right => {
+            VirtualKeyCode::S | VirtualKeyCode::Right => {
                 self.amount_right = amount;
                 true
             }
@@ -124,7 +126,15 @@ impl CameraController {
                 self.amount_up = amount;
                 true
             }
-            VirtualKeyCode::LShift => {
+            VirtualKeyCode::Escape => {
+                if state == ElementState::Pressed && self.is_active {
+                    self.is_active = false;
+                    true
+                } else {
+                    false
+                }
+            }
+            VirtualKeyCode::LControl => {
                 self.amount_down = amount;
                 true
             }
@@ -133,8 +143,10 @@ impl CameraController {
     }
 
     pub fn process_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
-        self.rotate_horizontal = mouse_dx as f32;
-        self.rotate_vertical = mouse_dy as f32;
+        if self.is_active {
+            self.rotate_horizontal = mouse_dx as f32;
+            self.rotate_vertical = mouse_dy as f32;
+        }
     }
 
     pub fn process_scroll(&mut self, delta: &MouseScrollDelta) {

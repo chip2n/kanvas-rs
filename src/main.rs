@@ -9,7 +9,6 @@ use cgmath::prelude::*;
 use futures::executor::block_on;
 use model::Vertex;
 use winit::{
-    dpi::PhysicalPosition,
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
@@ -43,14 +42,14 @@ unsafe impl bytemuck::Zeroable for InstanceRaw {}
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut state = block_on(State::new(&window));
+    let mut state = block_on(State::new(window));
     let mut last_render_time = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             ref event,
             window_id,
-        } if window_id == window.id() => {
+        } if window_id == state.window.id() => {
             if !state.input(event) {
                 match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -72,6 +71,9 @@ fn main() {
                 };
             }
         }
+        Event::DeviceEvent { ref event, .. } => {
+            state.handle_device_event(event);
+        }
         Event::RedrawRequested(_) => {
             let now = std::time::Instant::now();
             let dt = now - last_render_time;
@@ -80,13 +82,14 @@ fn main() {
             state.render();
         }
         Event::MainEventsCleared => {
-            window.request_redraw();
+            state.window.request_redraw();
         }
         _ => {}
     });
 }
 
 struct State {
+    window: Window,
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -99,8 +102,6 @@ struct State {
     camera: camera2::Camera,
     projection: camera2::Projection,
     camera_controller: camera2::CameraController,
-    last_mouse_pos: PhysicalPosition<f64>,
-    mouse_pressed: bool,
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
@@ -115,9 +116,9 @@ struct State {
 }
 
 impl State {
-    async fn new(window: &Window) -> State {
+    async fn new(window: Window) -> State {
         let size = window.inner_size();
-        let surface = wgpu::Surface::create(window);
+        let surface = wgpu::Surface::create(&window);
         let adapter = wgpu::Adapter::request(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
@@ -183,10 +184,11 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let camera = camera2::Camera::new((0.0, 0.5, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera =
+            camera2::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection =
             camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let camera_controller = camera2::CameraController::new(4.0, 0.4);
+        let camera_controller = camera2::CameraController::new(4.0, 0.8);
 
         const SPACE_BETWEEN: f32 = 3.0;
         let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
@@ -384,6 +386,7 @@ impl State {
         };
 
         State {
+            window,
             surface,
             adapter,
             device,
@@ -396,8 +399,6 @@ impl State {
             camera,
             projection,
             camera_controller,
-            last_mouse_pos: (0.0, 0.0).into(),
-            mouse_pressed: false,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -433,26 +434,53 @@ impl State {
                         ..
                     },
                 ..
-            } => self.camera_controller.process_keyboard(*key, *state),
+            } => match key {
+                VirtualKeyCode::Escape => {
+                    if *state == ElementState::Pressed {
+                        if self.camera_controller.is_active {
+                            self.ungrab_camera();
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                _ => self.camera_controller.process_keyboard(*key, *state),
+            },
             WindowEvent::MouseWheel { delta, .. } => {
                 self.camera_controller.process_scroll(delta);
                 true
             }
             WindowEvent::MouseInput {
                 button: MouseButton::Left,
-                state,
                 ..
             } => {
-                self.mouse_pressed = *state == ElementState::Pressed;
+                self.grab_camera();
                 true
             }
-            WindowEvent::CursorMoved { position, .. } => {
-                let mouse_dx = position.x as f64 - self.last_mouse_pos.x;
-                let mouse_dy = position.y as f64 - self.last_mouse_pos.y;
-                self.last_mouse_pos = (*position).cast::<f64>();
-                if self.mouse_pressed {
-                    self.camera_controller.process_mouse(mouse_dx, mouse_dy);
-                }
+            _ => false,
+        }
+    }
+
+    fn grab_camera(&mut self) {
+        self.camera_controller.is_active = true;
+        self.window.set_cursor_visible(false);
+        self.window.set_cursor_grab(true).unwrap();
+    }
+
+    fn ungrab_camera(&mut self) {
+        self.camera_controller.is_active = false;
+        self.window.set_cursor_visible(true);
+        self.window.set_cursor_grab(false).unwrap();
+    }
+
+    fn handle_device_event(&mut self, event: &DeviceEvent) -> bool {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                let (mouse_dx, mouse_dy) = *delta;
+                self.camera_controller.process_mouse(mouse_dx, mouse_dy);
                 true
             }
             _ => false,
