@@ -28,8 +28,11 @@ void main() {
 
   vec3 view_dir = normalize(v_view_position - v_position);
   vec3 half_dir = normalize(view_dir + light_dir);
-  float specular_strength = pow(max(dot(normal, half_dir), 0.0), 32);
-  vec3 specular_color = specular_strength * light_color;
+
+  float shininess = 32;
+  float specular = pow(max(dot(normal, half_dir), 0.0), shininess);
+  float specular_strength = 0.5; // TODO sample from specular map
+  vec3 specular_color = specular_strength * specular * light_color;
 
   vec4 object_color = texture(sampler2D(t_diffuse, s_diffuse), v_tex_coords);
   float ambient_strength = 0.1;
