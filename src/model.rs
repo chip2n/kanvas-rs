@@ -11,6 +11,7 @@ where
         mesh: &'b Mesh,
         material: &'b Material,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
     fn draw_mesh_instanced(
@@ -19,12 +20,14 @@ where
         material: &'b Material,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
     fn draw_model(
         &mut self,
         model: &'b Model,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
     fn draw_model_instanced(
@@ -32,6 +35,7 @@ where
         model: &'b Model,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
     fn draw_model_instanced_with_material(
@@ -40,6 +44,7 @@ where
         material: &'b Material,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     );
 }
@@ -53,9 +58,10 @@ where
         mesh: &'b Mesh,
         material: &'b Material,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
-        self.draw_mesh_instanced(mesh, material, 0..1, uniforms, light);
+        self.draw_mesh_instanced(mesh, material, 0..1, uniforms, instances_bind_group, light);
     }
 
     fn draw_mesh_instanced(
@@ -64,13 +70,15 @@ where
         material: &'b Material,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
         self.set_vertex_buffer(0, &mesh.vertex_buffer, 0, 0);
         self.set_index_buffer(&mesh.index_buffer, 0, 0);
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, &uniforms, &[]);
-        self.set_bind_group(2, &light, &[]);
+        self.set_bind_group(2, &instances_bind_group, &[]);
+        self.set_bind_group(3, &light, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
@@ -78,9 +86,10 @@ where
         &mut self,
         model: &'b Model,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
-        self.draw_model_instanced(model, 0..1, uniforms, light);
+        self.draw_model_instanced(model, 0..1, uniforms, instances_bind_group, light);
     }
 
     fn draw_model_instanced(
@@ -88,11 +97,12 @@ where
         model: &'b Model,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, light);
+            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, instances_bind_group, light);
         }
     }
 
@@ -102,10 +112,11 @@ where
         material: &'b Material,
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
-            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, light);
+            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, instances_bind_group, light);
         }
     }
 }

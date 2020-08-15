@@ -12,7 +12,7 @@ layout(set = 0, binding = 0) uniform texture2D t_diffuse;
 layout(set = 0, binding = 1) uniform sampler s_diffuse;
 layout(set = 0, binding = 2) uniform texture2D t_normal;
 layout(set = 0, binding = 3) uniform sampler s_normal;
-layout(set = 2, binding = 0) uniform Light {
+layout(set = 3, binding = 0) uniform Light {
   vec3 light_position;
   vec3 light_color;
 };
@@ -20,7 +20,7 @@ layout(set = 2, binding = 0) uniform Light {
 void main() {
   vec4 object_normal = texture(sampler2D(t_normal, s_normal), v_tex_coords);
 
-  vec3 normal = normalize(object_normal.rgb);
+  vec3 normal = normalize(object_normal.rgb * 2.0 - 1.0);
   vec3 light_dir = normalize(v_light_position - v_position);
 
   float diffuse_strength = max(dot(normal, light_dir), 0.0);

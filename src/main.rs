@@ -80,10 +80,13 @@ struct State {
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    instances_bind_group_layout: wgpu::BindGroupLayout,
+    instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
     obj_model: model::Model,
+    plane_model: model::Model,
     light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
@@ -165,6 +168,35 @@ impl State {
             camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera2::CameraController::new(4.0, 0.8);
 
+        let mut uniforms = uniform::Uniforms::new();
+        uniforms.update_view_proj(&camera, &projection);
+        let uniform_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&[uniforms]),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                bindings: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                }],
+                label: Some("uniform_bind_group_layout"),
+            });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            bindings: &[wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &uniform_buffer,
+                    range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
+                },
+            }],
+            label: Some("uniform_bind_group"),
+        });
+
         let instances = vec![model::Instance {
             position: cgmath::Vector3 {
                 x: 0.0,
@@ -176,7 +208,10 @@ impl State {
                 cgmath::Deg(0.0),
             ),
         }];
-        let instance_data = instances.iter().map(model::Instance::to_raw).collect::<Vec<_>>();
+        let instance_data = instances
+            .iter()
+            .map(model::Instance::to_raw)
+            .collect::<Vec<_>>();
         let instance_buffer_size =
             instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
         let instance_buffer = device.create_buffer_with_data(
@@ -184,55 +219,32 @@ impl State {
             wgpu::BufferUsage::STORAGE_READ,
         );
 
-        let mut uniforms = uniform::Uniforms::new();
-        uniforms.update_view_proj(&camera, &projection);
-        let uniform_buffer = device.create_buffer_with_data(
-            bytemuck::cast_slice(&[uniforms]),
-            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-        );
-
-        let uniform_bind_group_layout =
+        let instances_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                bindings: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::StorageBuffer {
+                        dynamic: false,
+                        readonly: true,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            readonly: true,
-                        },
-                    },
-                ],
-                label: Some("uniform_bind_group_layout"),
+                }],
+                label: Some("instances_bind_group_layout"),
             });
 
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &uniform_buffer,
-                        range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
-                    },
+        let instances_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &instances_bind_group_layout,
+            bindings: &[wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &instance_buffer,
+                    range: 0..instance_buffer_size as wgpu::BufferAddress,
                 },
-                wgpu::Binding {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &instance_buffer,
-                        range: 0..instance_buffer_size as wgpu::BufferAddress,
-                    },
-                },
-            ],
-            label: Some("uniform_bind_group"),
+            }],
+            label: Some("instances_bind_group"),
         });
 
-        let light = light::Light::new((4.0, 10.0, 4.0).into(), (1.0, 1.0, 1.0).into());
+        let light = light::Light::new((1.5, 4.5, 1.5).into(), (1.0, 1.0, 1.0).into());
 
         // We'll want to update our lights position, so we use COPY_DST
         let light_buffer = device.create_buffer_with_data(
@@ -266,6 +278,7 @@ impl State {
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
                     &uniform_bind_group_layout,
+                    &instances_bind_group_layout,
                     &light_bind_group_layout,
                 ],
             });
@@ -315,6 +328,11 @@ impl State {
             model::Model::load(&device, &texture_bind_group_layout, "res/models/cube.obj").unwrap();
         queue.submit(&cmds);
 
+        let (plane_model, cmds) =
+            model::Model::load(&device, &texture_bind_group_layout, "res/models/plane.obj")
+                .unwrap();
+        queue.submit(&cmds);
+
         State {
             window,
             surface,
@@ -332,10 +350,13 @@ impl State {
             uniforms,
             uniform_buffer,
             uniform_bind_group,
+            instances_bind_group_layout,
+            instances_bind_group,
             instances,
             instance_buffer,
             depth_texture,
             obj_model,
+            plane_model,
             light_model,
             light,
             light_buffer,
@@ -531,6 +552,14 @@ impl State {
                 &self.obj_model,
                 0..self.instances.len() as u32,
                 &self.uniform_bind_group,
+                &self.instances_bind_group,
+                &self.light_bind_group,
+            );
+
+            render_pass.draw_model(
+                &self.plane_model,
+                &self.uniform_bind_group,
+                &self.instances_bind_group,
                 &self.light_bind_group,
             );
 

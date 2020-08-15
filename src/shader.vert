@@ -17,11 +17,11 @@ layout(set=1, binding=0) uniform Uniforms {
   mat4 u_view_proj;
 };
 
-layout(set=1, binding=1) buffer Instances {
+layout(set=2, binding=0) buffer Instances {
   mat4 s_models[];
 };
 
-layout(set=2, binding=0) uniform Light {
+layout(set=3, binding=0) uniform Light {
   vec3 light_position;
   vec3 light_color;
 };
@@ -29,7 +29,8 @@ layout(set=2, binding=0) uniform Light {
 void main() {
   mat4 model_matrix = s_models[gl_InstanceIndex];
 
-  // this can be calculated on the CPU and passed in with the other uniforms
+  // Calculate normal matrix, which is essentially just the rotation data from the model matrix
+  // This can be calculated on the CPU and passed in with the other uniforms
   mat3 normal_matrix = mat3(transpose(inverse(model_matrix)));
   vec3 normal = normalize(normal_matrix * a_normal);
   vec3 tangent = normalize(normal_matrix * a_tangent);
