@@ -10,11 +10,16 @@ homepage = "https://github.com/chip2n/kanvas-rs"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 
+# Using a higher optimization levels due to code being incredibly slow otherwise
+# (in particular loading images)
+[profile.dev]
+opt-level = 2
+
 [dependencies]
 winit = "0.20"
 wgpu = "0.5.0"
 futures = "0.3.4"
-image = "0.23.0"
+image = "0.23.8"
 cgmath = "0.17"
 shaderc = "0.6"
 bytemuck = "1.3.1"

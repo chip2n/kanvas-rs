@@ -2,6 +2,7 @@ mod camera;
 mod camera2;
 mod light;
 mod model;
+mod shader;
 mod texture;
 mod uniform;
 
@@ -243,7 +244,6 @@ impl State {
             }],
             label: Some("instances_bind_group"),
         });
-
         let light = light::Light::new((1.5, 4.5, 1.5).into(), (1.0, 1.0, 1.0).into());
 
         // We'll want to update our lights position, so we use COPY_DST
@@ -320,7 +320,7 @@ impl State {
             texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         let (obj_model, cmds) =
-            model::Model::load(&device, &texture_bind_group_layout, "res/models/table.obj")
+            model::Model::load(&device, &texture_bind_group_layout, "res/models/scene.obj")
                 .unwrap();
         queue.submit(&cmds);
 
@@ -587,30 +587,10 @@ fn create_render_pipeline(
     fs_src: &str,
 ) -> wgpu::RenderPipeline {
     let mut compiler = shaderc::Compiler::new().unwrap();
-    let vs_spirv = compiler
-        .compile_into_spirv(
-            vs_src,
-            shaderc::ShaderKind::Vertex,
-            "shader.vert",
-            "main",
-            None,
-        )
-        .unwrap();
-    let fs_spirv = compiler
-        .compile_into_spirv(
-            fs_src,
-            shaderc::ShaderKind::Fragment,
-            "shader.frag",
-            "main",
-            None,
-        )
-        .unwrap();
-
-    let vs_data = wgpu::read_spirv(std::io::Cursor::new(vs_spirv.as_binary_u8())).unwrap();
-    let fs_data = wgpu::read_spirv(std::io::Cursor::new(fs_spirv.as_binary_u8())).unwrap();
-
-    let vs_module = device.create_shader_module(&vs_data);
-    let fs_module = device.create_shader_module(&fs_data);
+    let vs_module =
+        shader::create_vertex_module(device, &mut compiler, vs_src, "shader.vert").unwrap();
+    let fs_module =
+        shader::create_fragment_module(device, &mut compiler, fs_src, "shader.frag").unwrap();
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &layout,

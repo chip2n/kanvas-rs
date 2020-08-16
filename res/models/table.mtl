@@ -10,5 +10,5 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 2
-map_Bump ../tex/plywood_nor_1k.png
-map_Kd ../tex/plywood_diff_1k.png
+map_Bump /home/chip/git/kanvas-rs/res/tex/plywood_nor_1k.png
+map_Kd /home/chip/git/kanvas-rs/res/tex/plywood_diff_1k.png
