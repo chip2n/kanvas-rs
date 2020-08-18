@@ -80,7 +80,7 @@ struct State {
     camera_controller: camera2::CameraController,
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
-    uniform_bind_group: wgpu::BindGroup,
+    globals_bind_group: wgpu::BindGroup,
     instances_bind_group_layout: wgpu::BindGroupLayout,
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
@@ -176,18 +176,18 @@ impl State {
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
-        let uniform_bind_group_layout =
+        let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 }],
-                label: Some("uniform_bind_group_layout"),
+                label: Some("globals_bind_group_layout"),
             });
 
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_bind_group_layout,
+        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &globals_bind_group_layout,
             bindings: &[wgpu::Binding {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer {
@@ -195,7 +195,7 @@ impl State {
                     range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
                 },
             }],
-            label: Some("uniform_bind_group"),
+            label: Some("globals_bind_group"),
         });
 
         let instances = vec![model::Instance {
@@ -277,7 +277,7 @@ impl State {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &uniform_bind_group_layout,
+                    &globals_bind_group_layout,
                     &instances_bind_group_layout,
                     &light_bind_group_layout,
                 ],
@@ -299,7 +299,7 @@ impl State {
 
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&uniform_bind_group_layout, &light_bind_group_layout],
+                bind_group_layouts: &[&globals_bind_group_layout, &light_bind_group_layout],
             });
 
             let vs_src = include_str!("light.vert");
@@ -349,7 +349,7 @@ impl State {
             camera_controller,
             uniforms,
             uniform_buffer,
-            uniform_bind_group,
+            globals_bind_group,
             instances_bind_group_layout,
             instances_bind_group,
             instances,
@@ -551,14 +551,14 @@ impl State {
             render_pass.draw_model_instanced(
                 &self.obj_model,
                 0..self.instances.len() as u32,
-                &self.uniform_bind_group,
+                &self.globals_bind_group,
                 &self.instances_bind_group,
                 &self.light_bind_group,
             );
 
             render_pass.draw_model(
                 &self.plane_model,
-                &self.uniform_bind_group,
+                &self.globals_bind_group,
                 &self.instances_bind_group,
                 &self.light_bind_group,
             );
@@ -568,7 +568,7 @@ impl State {
             use light::DrawLight;
             render_pass.draw_light_model(
                 &self.light_model,
-                &self.uniform_bind_group,
+                &self.globals_bind_group,
                 &self.light_bind_group,
             );
         }
