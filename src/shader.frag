@@ -1,10 +1,12 @@
-// shader.frag
 #version 450
 
-layout(location=0) in vec2 v_tex_coords;
-layout(location=1) in vec3 v_position;
-layout(location=2) in vec3 v_light_position;
-layout(location=3) in vec3 v_view_position;
+// We do all light calculations in tangent space to avoid having to do matrix multiplications
+// for every fragment (in order to convert normal sampled from normal map into world space).
+
+layout(location=0) in vec3 v_position;       // tangent space
+layout(location=1) in vec3 v_light_position; // tangent space
+layout(location=2) in vec3 v_view_position;  // tangent space
+layout(location=3) in vec2 v_tex_coords;
 
 layout(location=0) out vec4 f_color;
 
@@ -18,9 +20,12 @@ layout(set = 3, binding = 0) uniform Light {
 };
 
 void main() {
+  // Obtain normal from the normal map
   vec4 object_normal = texture(sampler2D(t_normal, s_normal), v_tex_coords);
 
+  // Normals are stored in ranges [0..1], but we need them in [-1, 1]
   vec3 normal = normalize(object_normal.rgb * 2.0 - 1.0);
+  
   vec3 light_dir = normalize(v_light_position - v_position);
 
   float diffuse_strength = max(dot(normal, light_dir), 0.0);
