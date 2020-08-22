@@ -1,5 +1,6 @@
 mod camera;
 mod camera2;
+mod debug;
 mod light;
 mod model;
 mod shader;
@@ -611,9 +612,6 @@ impl State {
     }
 
     fn render(&mut self) {
-        use light::DrawLight;
-        use model::DrawModel;
-
         // Get a frame to render to
         let frame = self
             .swap_chain
@@ -626,10 +624,25 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
+        self.render_with_encoder(&mut encoder, &frame.view);
+
+        let texture = &self.test_material.diffuse_texture;
+        let (buffer, buffer_size) = debug::copy_texture_to_new_buffer(&self.device, &mut encoder, &texture);
+
+        self.queue.submit(&[encoder.finish()]);
+
+        //block_on(debug::save_buffer(&self.device, &buffer, buffer_size, texture.size.width, texture.size.height));
+        //block_on(debug::save_texture(&self.device, &self.depth_texture));
+    }
+
+    fn render_with_encoder(&self, encoder: &mut wgpu::CommandEncoder, frame: &wgpu::TextureView) {
+        use light::DrawLight;
+        use model::DrawModel;
+
         // clear the screen
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
+                attachment: frame,
                 resolve_target: None,
                 load_op: wgpu::LoadOp::Clear,
                 store_op: wgpu::StoreOp::Store,
@@ -688,7 +701,6 @@ impl State {
             );
             */
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // where we're going to draw our color to
                 color_attachments: &[],
                 /*
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -735,7 +747,7 @@ impl State {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 // where we're going to draw our color to
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
+                    attachment: &frame,
                     resolve_target: None,
                     load_op: wgpu::LoadOp::Load, // prevent clearing after each draw
                     store_op: wgpu::StoreOp::Store,
@@ -782,7 +794,7 @@ impl State {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 // where we're going to draw our color to
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
+                    attachment: &frame,
                     resolve_target: None,
                     load_op: wgpu::LoadOp::Load, // prevent clearing after each draw
                     store_op: wgpu::StoreOp::Store,
@@ -807,8 +819,6 @@ impl State {
                 &self.light_bind_group,
             );
         }
-
-        self.queue.submit(&[encoder.finish()]);
     }
 }
 
@@ -932,10 +942,10 @@ fn create_test_material(
     layout: &wgpu::BindGroupLayout,
     queue: &wgpu::Queue,
 ) -> model::Material {
-    let texture =
-        texture::Texture::create_depth_texture(device, sc_desc, "test_depth");
-        //texture::Texture::create_color_texture(device, sc_desc, "test_depth");
-    let (normal_map, cmd) = texture::Texture::load(&device, "res/tex/normal_map_static.png", true).unwrap();
+    let texture = texture::Texture::create_depth_texture(device, sc_desc, "test_depth");
+    //texture::Texture::create_color_texture(device, sc_desc, "test_depth");
+    let (normal_map, cmd) =
+        texture::Texture::load(&device, "res/tex/normal_map_static.png", true).unwrap();
     queue.submit(&[cmd]);
     model::Material::new(&device, "test", texture, normal_map, layout)
 }

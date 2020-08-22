@@ -2,6 +2,7 @@ use image::GenericImageView;
 use std::path::Path;
 
 pub struct Texture {
+    pub size: wgpu::Extent3d,
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
@@ -59,6 +60,7 @@ impl Texture {
         });
 
         Self {
+            size,
             texture,
             view,
             sampler,
@@ -104,6 +106,7 @@ impl Texture {
         });
 
         Self {
+            size,
             texture,
             view,
             sampler,
@@ -189,6 +192,7 @@ impl Texture {
 
         Ok((
             Self {
+                size,
                 texture,
                 view,
                 sampler,
