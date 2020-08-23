@@ -1,5 +1,5 @@
 use crate::shader;
-use std::mem;
+use std::{mem, num::NonZeroU32};
 
 // TODO support moar lights
 //const MAX_LIGHTS: usize = 10;
@@ -40,14 +40,14 @@ pub fn create_pass(
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Nearest,
-        compare: wgpu::CompareFunction::LessEqual,
+        compare: Some(wgpu::CompareFunction::LessEqual),
         lod_min_clamp: -100.0,
         lod_max_clamp: 100.0,
+        ..Default::default()
     });
 
     let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
         size: SHADOW_SIZE,
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -56,37 +56,42 @@ pub fn create_pass(
         label: None,
     });
 
-    let shadow_view = shadow_texture.create_default_view();
+    let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let shadow_target_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-        format: SHADOW_FORMAT, // TODO unsure of this
-        dimension: wgpu::TextureViewDimension::D2,
+        label: Some("Shadow"),
+        format: None,
+        dimension: Some(wgpu::TextureViewDimension::D2),
         aspect: wgpu::TextureAspect::All,
         base_mip_level: 0,
-        level_count: 1,             // TODO unsure of this
-        base_array_layer: 0 as u32, // TODO unsure of this
-        array_layer_count: 1,       // TODO unsure of this
+        level_count: None,
+        base_array_layer: 0,
+        array_layer_count: NonZeroU32::new(1),
     });
 
     let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        bindings: &[wgpu::BindGroupLayoutEntry {
+        entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStage::VERTEX,
-            ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+            ty: wgpu::BindingType::UniformBuffer {
+                dynamic: false,
+                min_binding_size: wgpu::BufferSize::new(uniform_size),
+            },
+            count: None,
         }],
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         // TODO we don't need all these
+        label: Some("Shadow pipeline"),
+        push_constant_ranges: &[],
         bind_group_layouts: &[
             &texture_bind_group_layout,
             &globals_bind_group_layout,
             &instances_bind_group_layout,
-
-
             // TODO these don't match - figure out how to pass light position in a consistent way
             //&light_bind_group_layout,
-            &bind_group_layout
+            &bind_group_layout,
         ],
     });
 
@@ -94,16 +99,14 @@ pub fn create_pass(
         label: None,
         size: uniform_size,
         usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        mapped_at_creation: false,
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
-        bindings: &[wgpu::Binding {
+        entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: wgpu::BindingResource::Buffer {
-                buffer: &uniform_buf,
-                range: 0..uniform_size,
-            },
+            resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
         }],
         label: None,
     });
@@ -116,7 +119,8 @@ pub fn create_pass(
         shader::create_fragment_module(device, shader_compiler, fs_src, "shadow.frag").unwrap();
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        layout: &pipeline_layout,
+        label: Some("Shadow pipeline"),
+        layout: Some(&pipeline_layout),
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vs_module,
             entry_point: "main",
@@ -131,6 +135,7 @@ pub fn create_pass(
             depth_bias: 2, // corresponds to bilinear filtering
             depth_bias_slope_scale: 2.0,
             depth_bias_clamp: 0.0,
+            clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
         }),
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[],
@@ -138,11 +143,7 @@ pub fn create_pass(
             format: SHADOW_FORMAT,
             depth_write_enabled: true,
             depth_compare: wgpu::CompareFunction::LessEqual,
-            // TODO not sure about these four:
-            stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-            stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-            stencil_read_mask: 0,
-            stencil_write_mask: 0,
+            stencil: wgpu::StencilStateDescriptor::default(),
         }),
         vertex_state: wgpu::VertexStateDescriptor {
             index_format: wgpu::IndexFormat::Uint16,
