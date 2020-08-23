@@ -1,5 +1,4 @@
 mod camera2;
-mod debug;
 mod light;
 mod model;
 mod shader;
@@ -70,14 +69,11 @@ fn main() {
 struct State {
     window: Window,
     surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     render_pipeline: wgpu::RenderPipeline,
-    render_pipeline2: wgpu::RenderPipeline,
-    render_pipeline_debug_depth: wgpu::RenderPipeline,
     light_render_pipeline: wgpu::RenderPipeline,
     size: winit::dpi::PhysicalSize<u32>,
     camera: camera2::Camera,
@@ -100,8 +96,6 @@ struct State {
     light_bind_group: wgpu::BindGroup,
     shadow_pass: shadow::Pass,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    texture_bind_group_layout2: wgpu::BindGroupLayout,
-    test_material: model::Material,
 }
 
 impl State {
@@ -143,7 +137,6 @@ impl State {
         // A BindGroup describes a set of resources and how they can be accessed by a shader.
         // We create a BindGroup using a BindGroupLayout.
         let texture_bind_group_layout = texture::create_bind_group_layout(&device);
-        let texture_bind_group_layout2 = texture::create_bind_group_layout2(&device);
 
         let camera =
             camera2::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
@@ -153,11 +146,7 @@ impl State {
 
         let mut uniforms = uniform::Uniforms::new();
         uniforms.update_view_proj(&camera, &projection);
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniforms"),
-            contents: bytemuck::cast_slice(&[uniforms]),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-        });
+        let uniform_buffer = uniform::create_buffer(&device, &[uniforms]);
 
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -199,8 +188,6 @@ impl State {
             .iter()
             .map(model::Instance::to_raw)
             .collect::<Vec<_>>();
-        let instance_buffer_size =
-            instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instances"),
             contents: bytemuck::cast_slice(&instance_data),
@@ -249,8 +236,6 @@ impl State {
             .iter()
             .map(model::Instance::to_raw)
             .collect::<Vec<_>>();
-        let plane_instance_buffer_size =
-            plane_instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
         let plane_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Plane instances"),
             contents: bytemuck::cast_slice(&plane_instance_data),
@@ -327,66 +312,12 @@ impl State {
                 fs_src,
             )
         };
-        let render_pipeline2 = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render pipeline 2"),
-                push_constant_ranges: &[],
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &globals_bind_group_layout,
-                    &instances_bind_group_layout,
-                    &light_bind_group_layout,
-                ],
-            });
 
-            let vs_src = include_str!("shader.vert");
-            let fs_src = include_str!("shader.frag");
-
-            create_render_pipeline2(
-                &device,
-                &layout,
-                Some(texture::Texture::DEPTH_FORMAT),
-                &vertex_descs,
-                &mut shader_compiler,
-                vs_src,
-                fs_src,
-            )
-        };
-
-        let render_pipeline_debug_depth = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render pipeline debug"),
-                push_constant_ranges: &[],
-                bind_group_layouts: &[
-                    &texture_bind_group_layout2,
-                    &globals_bind_group_layout,
-                    &instances_bind_group_layout,
-                    &light_bind_group_layout,
-                ],
-            });
-
-            let vs_src = include_str!("debug_depth.vert");
-            let fs_src = include_str!("debug_depth.frag");
-
-            create_render_pipeline(
-                &device,
-                &layout,
-                sc_desc.format,
-                None,
-                &vertex_descs,
-                &mut shader_compiler,
-                vs_src,
-                fs_src,
-            )
-        };
-
-        let shadow_pass = shadow::create_pass(
+        let shadow_pass = shadow::Pass::new(
             &device,
             &mut shader_compiler,
-            &texture_bind_group_layout,
             &globals_bind_group_layout,
             &instances_bind_group_layout,
-            &light_bind_group_layout,
             &vertex_descs,
         );
 
@@ -429,20 +360,14 @@ impl State {
                 .unwrap();
         queue.submit(cmds);
 
-        let test_material =
-            create_test_material(&device, &sc_desc, &texture_bind_group_layout2, &queue);
-
         State {
             window,
             surface,
-            adapter,
             device,
             queue,
             sc_desc,
             swap_chain,
             render_pipeline,
-            render_pipeline2,
-            render_pipeline_debug_depth,
             light_render_pipeline,
             size,
             camera,
@@ -465,8 +390,6 @@ impl State {
             light_bind_group,
             shadow_pass,
             texture_bind_group_layout,
-            texture_bind_group_layout2,
-            test_material,
         }
     }
 
@@ -479,13 +402,6 @@ impl State {
             texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
 
         self.projection.resize(new_size.width, new_size.height);
-
-        self.test_material = create_test_material(
-            &self.device,
-            &self.sc_desc,
-            &self.texture_bind_group_layout2,
-            &self.queue,
-        );
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -620,17 +536,7 @@ impl State {
             });
 
         self.render_with_encoder(&mut encoder, &frame.output);
-
-        /*
-        let texture = &self.test_material.diffuse_texture;
-        let (buffer, buffer_size) =
-            debug::copy_texture_to_new_buffer(&self.device, &mut encoder, &texture);
-        */
-
         self.queue.submit(iter::once(encoder.finish()));
-
-        //block_on(debug::save_buffer(&self.device, &buffer, buffer_size, texture.size.width, texture.size.height));
-        //block_on(debug::save_texture(&self.device, &self.depth_texture));
     }
 
     fn render_with_encoder(
@@ -661,89 +567,23 @@ impl State {
             depth_stencil_attachment: None,
         });
 
-        // clear the test material
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &self.test_material.diffuse_texture.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(back_color),
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        });
-
         {
             // shadow pass
-
-            /*
-            let mut shadow_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    attachment: &self.shadow_pass.target_view,
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    stencil_load_op: wgpu::LoadOp::Clear,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_stencil: 0,
-                }),
-            });
-
-            shadow_pass.set_pipeline(&self.shadow_pass.pipeline);
-            // TODO use e.g. DrawShadow trait?
-            shadow_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.globals_bind_group,
-                &self.instances_bind_group,
-                &self.light_bind_group,
-            );
-            */
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[],
-                /*
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    //attachment: &frame.view,
-                    attachment: &self.test_material.diffuse_texture.view,
-                    resolve_target: None,
-                    load_op: wgpu::LoadOp::Load, // prevent clearing after each draw
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    },
-                }],
-                */
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    //attachment: &self.shadow_pass.target_view,
-                    //attachment: &self.depth_texture.view,
-                    attachment: &self.test_material.diffuse_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline2);
-
-            render_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.globals_bind_group,
-                &self.instances_bind_group,
-                &self.light_bind_group,
-            );
+            let mut render_pass = self.shadow_pass.begin(encoder);
+            for mesh in &self.obj_model.meshes {
+                shadow::render(
+                    &mut render_pass,
+                    shadow::ShadowPassRenderData::from_mesh(
+                        &mesh,
+                        &self.globals_bind_group,
+                        &self.instances_bind_group,
+                    ),
+                );
+            }
         }
 
         {
             // forward pass
-
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 // where we're going to draw our color to
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -779,34 +619,6 @@ impl State {
             render_pass.draw_light_model(
                 &self.light_model,
                 &self.globals_bind_group,
-                &self.light_bind_group,
-            );
-        }
-
-        {
-            // debug depth pass
-
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // where we're going to draw our color to
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load, // prevent clearing after each draw
-                        store: true,
-                    },
-                }],
-                depth_stencil_attachment: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline_debug_depth);
-
-            render_pass.draw_model_instanced_with_material(
-                &self.plane_model,
-                &self.test_material,
-                0..1,
-                &self.globals_bind_group,
-                &self.plane_instances_bind_group,
                 &self.light_bind_group,
             );
         }
@@ -867,68 +679,4 @@ fn create_render_pipeline(
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
     })
-}
-
-fn create_render_pipeline2(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    depth_format: Option<wgpu::TextureFormat>,
-    vertex_descs: &[wgpu::VertexBufferDescriptor],
-    shader_compiler: &mut shaderc::Compiler,
-    vs_src: &str,
-    fs_src: &str,
-) -> wgpu::RenderPipeline {
-    let vs_module =
-        shader::create_vertex_module(device, shader_compiler, vs_src, "shader.vert").unwrap();
-    let fs_module =
-        shader::create_fragment_module(device, shader_compiler, fs_src, "shader.frag").unwrap();
-
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("depth"),
-        layout: Some(&layout),
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
-            module: &vs_module,
-            entry_point: "main",
-        },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-            module: &fs_module,
-            entry_point: "main",
-        }),
-        // description of how to process triangles
-        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Back,
-            ..Default::default()
-        }),
-        // description on how color are stored and processed throughout the pipeline
-        color_states: &[],
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        depth_stencil_state: depth_format.map(|format| wgpu::DepthStencilStateDescriptor {
-            format,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
-            stencil: wgpu::StencilStateDescriptor::default(),
-        }),
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint32,
-            vertex_buffers: vertex_descs,
-        },
-        sample_count: 1,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
-    })
-}
-
-fn create_test_material(
-    device: &wgpu::Device,
-    sc_desc: &wgpu::SwapChainDescriptor,
-    layout: &wgpu::BindGroupLayout,
-    queue: &wgpu::Queue,
-) -> model::Material {
-    let texture = texture::Texture::create_depth_texture(device, sc_desc, "test_depth");
-    //texture::Texture::create_color_texture(device, sc_desc, "test_depth");
-    let (normal_map, cmd) =
-        texture::Texture::load(&device, "res/tex/normal_map_static.png", true).unwrap();
-    queue.submit(iter::once(cmd));
-    model::Material::new(&device, "test", texture, normal_map, layout)
 }

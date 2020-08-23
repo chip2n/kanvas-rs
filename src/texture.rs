@@ -57,11 +57,7 @@ impl Texture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-
-            // TODO does this work?
-            //compare: None,
             compare: Some(wgpu::CompareFunction::LessEqual),
-
             ..Default::default()
         });
 
@@ -71,16 +67,6 @@ impl Texture {
             view,
             sampler,
         }
-    }
-
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        bytes: &[u8],
-        label: Option<&str>,
-        is_normal_map: bool,
-    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, &img, label, is_normal_map)
     }
 
     pub fn from_image(
@@ -184,46 +170,6 @@ pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
                 binding: 1,
                 visibility: wgpu::ShaderStage::FRAGMENT,
                 ty: wgpu::BindingType::Sampler { comparison: false },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::SampledTexture {
-                    multisampled: false,
-                    component_type: wgpu::TextureComponentType::Float,
-                    dimension: wgpu::TextureViewDimension::D2,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 3,
-                visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::Sampler { comparison: false },
-                count: None,
-            },
-        ],
-        label: Some("texture_bind_group_layout"),
-    })
-}
-
-pub fn create_bind_group_layout2(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::SampledTexture {
-                    multisampled: false,
-                    dimension: wgpu::TextureViewDimension::D2,
-                    component_type: wgpu::TextureComponentType::Uint,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::Sampler { comparison: true },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
