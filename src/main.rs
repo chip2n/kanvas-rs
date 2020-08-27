@@ -317,19 +317,8 @@ impl State {
                 ],
             });
 
-            let vs_src = include_str!("shader.vert");
-            let fs_src = include_str!("shader.frag");
-
-            let vs_module =
-                shader::create_vertex_module(&device, &mut shader_compiler, vs_src, "shader.vert")
-                    .unwrap();
-            let fs_module = shader::create_fragment_module(
-                &device,
-                &mut shader_compiler,
-                fs_src,
-                "shader.frag",
-            )
-            .unwrap();
+            let vs_module = compile_vertex!(&device, &mut shader_compiler, "shader.vert").unwrap();
+            let fs_module = compile_frag!(&device, &mut shader_compiler, "shader.frag").unwrap();
 
             pipeline::create(
                 &"forward",
@@ -377,15 +366,8 @@ impl State {
                 bind_group_layouts: &[&globals_bind_group_layout, &light_bind_group_layout],
             });
 
-            let vs_src = include_str!("light.vert");
-            let fs_src = include_str!("light.frag");
-
-            let vs_module =
-                shader::create_vertex_module(&device, &mut shader_compiler, vs_src, "light.vert")
-                    .unwrap();
-            let fs_module =
-                shader::create_fragment_module(&device, &mut shader_compiler, fs_src, "light.frag")
-                    .unwrap();
+            let vs_module = compile_vertex!(&device, &mut shader_compiler, "light.vert").unwrap();
+            let fs_module = compile_frag!(&device, &mut shader_compiler, "light.frag").unwrap();
 
             pipeline::create(
                 &"light",

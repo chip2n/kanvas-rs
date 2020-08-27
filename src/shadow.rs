@@ -1,6 +1,6 @@
-use crate::pipeline;
 use crate::model;
-use crate::shader;
+use crate::pipeline;
+use crate::{compile_frag, compile_vertex};
 use std::num::NonZeroU32;
 use std::ops::Range;
 
@@ -36,7 +36,9 @@ impl Pass {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: SHADOW_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_SRC,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
+                | wgpu::TextureUsage::SAMPLED
+                | wgpu::TextureUsage::COPY_SRC,
             label: None,
         });
 
@@ -58,12 +60,8 @@ impl Pass {
             bind_group_layouts: &[&globals_bind_group_layout, &instances_bind_group_layout],
         });
 
-        let vs_src = include_str!("shadow.vert");
-        let fs_src = include_str!("shadow.frag");
-        let vs_module =
-            shader::create_vertex_module(device, shader_compiler, vs_src, "shadow.vert").unwrap();
-        let fs_module =
-            shader::create_fragment_module(device, shader_compiler, fs_src, "shadow.frag").unwrap();
+        let vs_module = compile_vertex!(device, shader_compiler, "shadow.vert").unwrap();
+        let fs_module = compile_frag!(device, shader_compiler, "shadow.frag").unwrap();
 
         let pipeline = pipeline::create(
             &"shadow pass",
