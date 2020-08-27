@@ -22,18 +22,17 @@ layout(set = 3, binding = 0) uniform Light {
 layout(set = 3, binding = 1) uniform texture2D shadow_tex;
 layout(set = 3, binding = 2) uniform sampler shadow_map;
 
-const float z_near = 0.1;
-const float z_far = 100;
-
-float to_linear_depth(float depth) {
-  float z_n = 2.0 * depth - 1.0;
-  float z_e = 2.0 * z_near * z_far / (z_far + z_near - z_n * (z_far - z_near));
-  return z_e;
-}
-
-// https://stackoverflow.com/questions/51108596/linearize-depth
-float linearize_depth(float d) {
-  return z_near * z_far / (z_far + d * (z_near - z_far));
+float pcf(vec2 coords, float current_depth, ivec2 texture_size) {
+  float shadow = 0.0;
+  vec2 texel_size = 1.0 / texture_size;
+  for(int x = -1; x <= 1; ++x) {
+      for(int y = -1; y <= 1; ++y) {
+          float pcf_depth = texture(sampler2D(shadow_tex, shadow_map), coords + vec2(x, -y) * texel_size).r;
+          shadow += current_depth > pcf_depth ? 1.0 : 0.0;
+      }
+  }
+  shadow /= 9.0;
+  return shadow;
 }
 
 float calculate_shadow() {
@@ -62,17 +61,7 @@ float calculate_shadow() {
     return 0.0;
   }
 
-  // get closest depth value from light's perspective (using [0,1] range as coords)
-  float closest_depth = texture(sampler2D(shadow_tex, shadow_map), proj_coords.xy).r;
-
-  // prevent shadow acne with a bias
-  //float bias = 0.005;
-  float bias = 0.0;
-
-  // check whether current frag pos is in shadow
-  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
-  //float shadow = closest_depth > 100.0 ? 1.0 : 0.0;
-  //float shadow = to_linear_depth(closest_depth) > 100.0 ? 1.0 : 0.0;
+  float shadow = pcf(proj_coords.xy, current_depth, size);
 
   return shadow;
 }
