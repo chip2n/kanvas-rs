@@ -12,8 +12,8 @@ pub fn create_vertex_module(
             "main",
             None,
         )?;
-    let data = wgpu::read_spirv(std::io::Cursor::new(spirv.as_binary_u8())).unwrap();
-    Ok(device.create_shader_module(&data))
+    let data = wgpu::util::make_spirv(spirv.as_binary_u8());
+    Ok(device.create_shader_module(data))
 }
 
 pub fn create_fragment_module(
@@ -30,6 +30,6 @@ pub fn create_fragment_module(
             "main",
             None,
         )?;
-    let data = wgpu::read_spirv(std::io::Cursor::new(spirv.as_binary_u8())).unwrap();
-    Ok(device.create_shader_module(&data))
+    let data = wgpu::util::make_spirv(spirv.as_binary_u8());
+    Ok(device.create_shader_module(data))
 }

@@ -1,6 +1,7 @@
 use crate::texture;
 use std::ops::Range;
 use std::path::Path;
+use wgpu::util::DeviceExt;
 
 pub trait DrawModel<'a, 'b>
 where
@@ -73,8 +74,8 @@ where
         instances_bind_group: &'b wgpu::BindGroup,
         light: &'b wgpu::BindGroup,
     ) {
-        self.set_vertex_buffer(0, &mesh.vertex_buffer, 0, 0);
-        self.set_index_buffer(&mesh.index_buffer, 0, 0);
+        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        self.set_index_buffer(mesh.index_buffer.slice(..));
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, &uniforms, &[]);
         self.set_bind_group(2, &instances_bind_group, &[]);
@@ -102,7 +103,14 @@ where
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, instances_bind_group, light);
+            self.draw_mesh_instanced(
+                mesh,
+                material,
+                instances.clone(),
+                uniforms,
+                instances_bind_group,
+                light,
+            );
         }
     }
 
@@ -116,7 +124,14 @@ where
         light: &'b wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
-            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms, instances_bind_group, light);
+            self.draw_mesh_instanced(
+                mesh,
+                material,
+                instances.clone(),
+                uniforms,
+                instances_bind_group,
+                light,
+            );
         }
     }
 }
@@ -146,20 +161,20 @@ impl Material {
         // so long as they all share the same BindGroupLayout.
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            bindings: &[
-                wgpu::Binding {
+            entries: &[
+                wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&normal_texture.view),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
                 },
@@ -291,14 +306,16 @@ impl Model {
                 vertices[c[2] as usize].bitangent = bitangent;
             }
 
-            let vertex_buffer = device.create_buffer_with_data(
-                bytemuck::cast_slice(&vertices),
-                wgpu::BufferUsage::VERTEX,
-            );
-            let index_buffer = device.create_buffer_with_data(
-                bytemuck::cast_slice(&m.mesh.indices),
-                wgpu::BufferUsage::INDEX,
-            );
+            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsage::VERTEX,
+            });
+            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&m.mesh.indices),
+                usage: wgpu::BufferUsage::INDEX,
+            });
 
             meshes.push(Mesh {
                 name: m.name,
