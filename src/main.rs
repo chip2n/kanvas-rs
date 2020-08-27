@@ -1,4 +1,5 @@
 mod camera2;
+mod debug;
 mod light;
 mod model;
 mod shader;
@@ -77,7 +78,7 @@ struct State {
     light_render_pipeline: wgpu::RenderPipeline,
     size: winit::dpi::PhysicalSize<u32>,
     camera: camera2::Camera,
-    projection: camera2::Projection,
+    projection: camera2::PerspectiveProjection,
     camera_controller: camera2::CameraController,
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
@@ -96,6 +97,8 @@ struct State {
     light_bind_group: wgpu::BindGroup,
     shadow_pass: shadow::Pass,
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    save_texture: bool,
+    debug_pass: debug::DebugPass,
 }
 
 impl State {
@@ -140,8 +143,13 @@ impl State {
 
         let camera =
             camera2::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
-        let projection =
-            camera2::Projection::new(sc_desc.width, sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
+        let projection = camera2::PerspectiveProjection::new(
+            sc_desc.width,
+            sc_desc.height,
+            cgmath::Deg(45.0),
+            0.1,
+            100.0,
+        );
         let camera_controller = camera2::CameraController::new(4.0, 0.8);
 
         let mut uniforms = uniform::Uniforms::new();
@@ -261,27 +269,37 @@ impl State {
 
         let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                        min_binding_size: wgpu::BufferSize::new(
-                            mem::size_of::<light::Light>() as _,
-                        ),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                mem::size_of::<light::Light>() as _
+                            ),
+                        },
+                        count: None,
                     },
-                    count: None
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            component_type: wgpu::TextureComponentType::Float,
+                            dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                ],
                 label: None,
             });
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(light_buffer.slice(..)),
-            }],
-            label: None,
-        });
 
         let mut shader_compiler = shaderc::Compiler::new().unwrap();
         let vertex_descs = [model::ModelVertex::desc()];
@@ -320,6 +338,25 @@ impl State {
             &instances_bind_group_layout,
             &vertex_descs,
         );
+
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &light_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(light_buffer.slice(..)),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&shadow_pass.target_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&shadow_pass.sampler),
+                },
+            ],
+            label: None,
+        });
 
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -360,6 +397,8 @@ impl State {
                 .unwrap();
         queue.submit(cmds);
 
+        let debug_pass = debug::DebugPass::new(&device, &shadow_pass.target_view, &shadow_pass.sampler, &globals_bind_group_layout);
+
         State {
             window,
             surface,
@@ -390,6 +429,8 @@ impl State {
             light_bind_group,
             shadow_pass,
             texture_bind_group_layout,
+            save_texture: false,
+            debug_pass,
         }
     }
 
@@ -427,6 +468,16 @@ impl State {
                         false
                     }
                 }
+                /*
+                VirtualKeyCode::S => {
+                    if *state == ElementState::Pressed {
+                        self.save_texture = true;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                */
                 _ => self.camera_controller.process_keyboard(*key, *state),
             },
             WindowEvent::MouseWheel { delta, .. } => {
@@ -537,6 +588,11 @@ impl State {
 
         self.render_with_encoder(&mut encoder, &frame.output);
         self.queue.submit(iter::once(encoder.finish()));
+
+        if self.save_texture {
+            debug::save_texture(&self.device, 1024, 1024, &self.shadow_pass.texture);
+            self.save_texture = false;
+        }
     }
 
     fn render_with_encoder(
@@ -622,6 +678,8 @@ impl State {
                 &self.light_bind_group,
             );
         }
+
+        self.debug_pass.render(encoder, &frame, &self.globals_bind_group);
     }
 }
 

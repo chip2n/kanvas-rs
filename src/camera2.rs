@@ -40,14 +40,14 @@ impl Camera {
     }
 }
 
-pub struct Projection {
+pub struct PerspectiveProjection {
     aspect: f32,
     fovy: Rad<f32>,
     znear: f32,
     zfar: f32,
 }
 
-impl Projection {
+impl PerspectiveProjection {
     pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F, znear: f32, zfar: f32) -> Self {
         Self {
             aspect: width as f32 / height as f32,
@@ -62,7 +62,42 @@ impl Projection {
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {
-        OPENGL_TO_WGPU_MATRIX * perspective(self.fovy, self.aspect, self.znear, self.zfar)
+        OPENGL_TO_WGPU_MATRIX *
+            cgmath::perspective(self.fovy, self.aspect, self.znear, self.zfar)
+    }
+}
+
+pub struct OrthographicProjection {
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+    znear: f32,
+    zfar: f32,
+}
+
+impl OrthographicProjection {
+    pub fn new() -> Self {
+        Self {
+            left: -10.0,
+            right: 10.0,
+            bottom: -10.0,
+            top: 10.0,
+            znear: 0.1,
+            zfar: 100.0,
+        }
+    }
+
+    pub fn calc_matrix(&self) -> Matrix4<f32> {
+        OPENGL_TO_WGPU_MATRIX *
+            cgmath::ortho(
+                self.left,
+                self.right,
+                self.bottom,
+                self.top,
+                self.znear,
+                self.zfar,
+            )
     }
 }
 

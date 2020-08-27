@@ -7,6 +7,7 @@ use wgpu::util::DeviceExt;
 pub struct Uniforms {
     pub view_position: cgmath::Vector4<f32>,
     pub view_proj: cgmath::Matrix4<f32>,
+    pub light_proj: cgmath::Matrix4<f32>,
 }
 
 unsafe impl bytemuck::Pod for Uniforms {}
@@ -15,13 +16,28 @@ unsafe impl bytemuck::Zeroable for Uniforms {}
 impl Uniforms {
     pub fn new() -> Self {
         use cgmath::SquareMatrix;
+
+        // TODO Hard coded light projection for now
+        let light_proj = camera2::OrthographicProjection::new().calc_matrix();
+        let light_view = cgmath::Matrix4::look_at(
+            cgmath::Point3::new(5.0, 10.0, 20.0),
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::unit_y(),
+        );
+
         Self {
             view_position: cgmath::Zero::zero(),
             view_proj: cgmath::Matrix4::identity(),
+            light_proj: light_proj * light_view,
         }
     }
 
-    pub fn update_view_proj(&mut self, camera: &camera2::Camera, projection: &camera2::Projection) {
+    // TODO projection: Into<Matrix4>?
+    pub fn update_view_proj(
+        &mut self,
+        camera: &camera2::Camera,
+        projection: &camera2::PerspectiveProjection,
+    ) {
         self.view_position = camera.position.to_homogeneous();
         self.view_proj = projection.calc_matrix() * camera.calc_matrix();
     }

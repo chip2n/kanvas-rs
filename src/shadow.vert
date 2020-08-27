@@ -3,8 +3,9 @@
 layout(location=0) in vec3 a_position;
 
 layout(set=0, binding=0) uniform Uniforms {
-  vec3 u_view_position;
-  mat4 u_view_proj;
+  vec3 u_view_position; // TODO unnecessary
+  mat4 u_view_proj;     // TODO unnecessary
+  mat4 u_light_proj;
 };
 
 layout(set=1, binding=0) buffer Instances {
@@ -13,5 +14,6 @@ layout(set=1, binding=0) buffer Instances {
 
 void main() {
   mat4 model_matrix = s_models[gl_InstanceIndex];
-  gl_Position = u_view_proj * model_matrix * vec4(a_position, 1.0);
+  vec4 world_position = model_matrix * vec4(a_position, 1.0);
+  gl_Position = u_light_proj * vec4(world_position.xyz, 1.0);
 }

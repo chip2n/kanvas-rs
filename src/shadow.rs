@@ -9,14 +9,16 @@ const MAX_LIGHTS: usize = 1;
 
 const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
-    width: 512,
-    height: 512,
+    width: 1024,
+    height: 1024,
     depth: MAX_LIGHTS as u32,
 };
 
 pub struct Pass {
     pub pipeline: wgpu::RenderPipeline,
     pub target_view: wgpu::TextureView,
+    pub texture: wgpu::Texture,
+    pub sampler: wgpu::Sampler,
 }
 
 impl Pass {
@@ -27,17 +29,17 @@ impl Pass {
         instances_bind_group_layout: &wgpu::BindGroupLayout,
         vertex_descs: &[wgpu::VertexBufferDescriptor],
     ) -> Self {
-        let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: SHADOW_SIZE,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: SHADOW_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_SRC,
             label: None,
         });
 
-        let target_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+        let target_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("Shadow"),
             format: None,
             dimension: Some(wgpu::TextureViewDimension::D2),
@@ -90,7 +92,7 @@ impl Pass {
                 stencil: wgpu::StencilStateDescriptor::default(),
             }),
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: wgpu::IndexFormat::Uint32,
                 vertex_buffers: vertex_descs.clone(),
             },
             sample_count: 1,
@@ -98,17 +100,19 @@ impl Pass {
             alpha_to_coverage_enabled: false,
         });
 
+        let sampler = create_sampler(device);
+
         Self {
             pipeline,
             target_view,
+            texture,
+            sampler,
         }
     }
 
-    pub fn begin<'a>(
-        &'a self,
-        encoder: &'a mut wgpu::CommandEncoder,
-    ) -> wgpu::RenderPass<'a> {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+    pub fn begin<'a>(&'a self, encoder: &'a mut wgpu::CommandEncoder) -> wgpu::RenderPass<'a> {
+        // Clear depth buffer
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                 attachment: &self.target_view,
@@ -120,9 +124,35 @@ impl Pass {
             }),
         });
 
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.target_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
+
         render_pass.set_pipeline(&self.pipeline);
         render_pass
     }
+}
+
+fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("shadow"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        compare: None,
+        ..Default::default()
+    })
 }
 
 pub struct ShadowPassRenderData<'a> {
