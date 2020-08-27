@@ -1,3 +1,4 @@
+use crate::pipeline;
 use crate::model;
 use crate::shader;
 use std::num::NonZeroU32;
@@ -64,41 +65,16 @@ impl Pass {
         let fs_module =
             shader::create_fragment_module(device, shader_compiler, fs_src, "shadow.frag").unwrap();
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Shadow pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
-                module: &vs_module,
-                entry_point: "main",
-            },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-                module: &fs_module,
-                entry_point: "main",
-            }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Back,
-                depth_bias: 2, // corresponds to bilinear filtering
-                depth_bias_slope_scale: 2.0,
-                depth_bias_clamp: 0.0,
-                clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
-            }),
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[],
-            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
-                format: SHADOW_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilStateDescriptor::default(),
-            }),
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint32,
-                vertex_buffers: vertex_descs.clone(),
-            },
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
-        });
+        let pipeline = pipeline::create(
+            &"shadow pass",
+            device,
+            &pipeline_layout,
+            &vs_module,
+            &fs_module,
+            None,
+            Some(pipeline::DepthConfig::default()),
+            vertex_descs.clone(),
+        );
 
         let sampler = create_sampler(device);
 

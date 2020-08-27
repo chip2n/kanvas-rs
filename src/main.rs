@@ -2,6 +2,7 @@ mod camera2;
 mod debug;
 mod light;
 mod model;
+mod pipeline;
 mod shader;
 mod shadow;
 mod texture;
@@ -319,15 +320,26 @@ impl State {
             let vs_src = include_str!("shader.vert");
             let fs_src = include_str!("shader.frag");
 
-            create_render_pipeline(
+            let vs_module =
+                shader::create_vertex_module(&device, &mut shader_compiler, vs_src, "shader.vert")
+                    .unwrap();
+            let fs_module = shader::create_fragment_module(
+                &device,
+                &mut shader_compiler,
+                fs_src,
+                "shader.frag",
+            )
+            .unwrap();
+
+            pipeline::create(
+                &"forward",
                 &device,
                 &layout,
-                sc_desc.format,
-                Some(texture::Texture::DEPTH_FORMAT),
+                &vs_module,
+                &fs_module,
+                Some(sc_desc.format),
+                Some(pipeline::DepthConfig::no_bias()),
                 &vertex_descs,
-                &mut shader_compiler,
-                vs_src,
-                fs_src,
             )
         };
 
@@ -368,15 +380,22 @@ impl State {
             let vs_src = include_str!("light.vert");
             let fs_src = include_str!("light.frag");
 
-            create_render_pipeline(
+            let vs_module =
+                shader::create_vertex_module(&device, &mut shader_compiler, vs_src, "light.vert")
+                    .unwrap();
+            let fs_module =
+                shader::create_fragment_module(&device, &mut shader_compiler, fs_src, "light.frag")
+                    .unwrap();
+
+            pipeline::create(
+                &"light",
                 &device,
                 &layout,
-                sc_desc.format,
-                Some(texture::Texture::DEPTH_FORMAT),
+                &vs_module,
+                &fs_module,
+                Some(sc_desc.format),
+                Some(pipeline::DepthConfig::no_bias()),
                 &vertex_descs,
-                &mut shader_compiler,
-                vs_src,
-                fs_src,
             )
         };
 
@@ -397,7 +416,12 @@ impl State {
                 .unwrap();
         queue.submit(cmds);
 
-        let debug_pass = debug::DebugPass::new(&device, &shadow_pass.target_view, &shadow_pass.sampler, &globals_bind_group_layout);
+        let debug_pass = debug::DebugPass::new(
+            &device,
+            &shadow_pass.target_view,
+            &shadow_pass.sampler,
+            &globals_bind_group_layout,
+        );
 
         State {
             window,
@@ -679,62 +703,7 @@ impl State {
             );
         }
 
-        self.debug_pass.render(encoder, &frame, &self.globals_bind_group);
+        self.debug_pass
+            .render(encoder, &frame, &self.globals_bind_group);
     }
-}
-
-fn create_render_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    color_format: wgpu::TextureFormat,
-    depth_format: Option<wgpu::TextureFormat>,
-    vertex_descs: &[wgpu::VertexBufferDescriptor],
-    shader_compiler: &mut shaderc::Compiler,
-    vs_src: &str,
-    fs_src: &str,
-) -> wgpu::RenderPipeline {
-    let vs_module =
-        shader::create_vertex_module(device, shader_compiler, vs_src, "shader.vert").unwrap();
-    let fs_module =
-        shader::create_fragment_module(device, shader_compiler, fs_src, "shader.frag").unwrap();
-
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("forward"),
-        layout: Some(&layout),
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
-            module: &vs_module,
-            entry_point: "main",
-        },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-            module: &fs_module,
-            entry_point: "main",
-        }),
-        // description of how to process triangles
-        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Back,
-            ..Default::default()
-        }),
-        // description on how color are stored and processed throughout the pipeline
-        color_states: &[wgpu::ColorStateDescriptor {
-            format: color_format,
-            color_blend: wgpu::BlendDescriptor::REPLACE,
-            alpha_blend: wgpu::BlendDescriptor::REPLACE,
-            write_mask: wgpu::ColorWrite::ALL,
-        }],
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        depth_stencil_state: depth_format.map(|format| wgpu::DepthStencilStateDescriptor {
-            format,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
-            stencil: wgpu::StencilStateDescriptor::default(),
-        }),
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint32,
-            vertex_buffers: vertex_descs,
-        },
-        sample_count: 1,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
-    })
 }
