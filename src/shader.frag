@@ -53,12 +53,17 @@ float calculate_shadow() {
   if (proj_coords.x > size.x || proj_coords.x < 0) {
     return 0.0;
   }
-  
-  // get closest depth value from light's perspective (using [0,1] range as coords)
-  float closest_depth = texture(sampler2D(shadow_tex, shadow_map), proj_coords.xy).r;
 
   // get depth of current fragment from light's perspective
   float current_depth = proj_coords.z;
+
+  // if outside light's frustum, don't do any shadowing
+  if (current_depth > 1.0) {
+    return 0.0;
+  }
+
+  // get closest depth value from light's perspective (using [0,1] range as coords)
+  float closest_depth = texture(sampler2D(shadow_tex, shadow_map), proj_coords.xy).r;
 
   // prevent shadow acne with a bias
   //float bias = 0.005;
