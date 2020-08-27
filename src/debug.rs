@@ -5,8 +5,8 @@ use wgpu::util::DeviceExt;
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct SimpleVertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
+    position: cgmath::Vector3<f32>,
+    tex_coords: cgmath::Vector2<f32>,
 }
 
 unsafe impl bytemuck::Pod for SimpleVertex {}
@@ -38,22 +38,22 @@ impl Vertex for SimpleVertex {
     }
 }
 
-const PLANE_VERTICES: &[SimpleVertex] = &[
+const PLANE_VERTICES: [SimpleVertex; 4] = [
     SimpleVertex {
-        position: [0.0, 0.0, 0.0],
-        tex_coords: [0.0, 1.0],
+        position: cgmath::Vector3::new(-1.0, -1.0, 0.0),
+        tex_coords: cgmath::Vector2::new(0.0, 1.0),
     },
     SimpleVertex {
-        position: [1.0, 0.0, 0.0],
-        tex_coords: [1.0, 1.0],
+        position: cgmath::Vector3::new(1.0, -1.0, 0.0),
+        tex_coords: cgmath::Vector2::new(1.0, 1.0),
     },
     SimpleVertex {
-        position: [1.0, 1.0, 0.0],
-        tex_coords: [1.0, 0.0],
+        position: cgmath::Vector3::new(1.0, 1.0, 0.0),
+        tex_coords: cgmath::Vector2::new(1.0, 0.0),
     },
     SimpleVertex {
-        position: [0.0, 1.0, 0.0],
-        tex_coords: [0.0, 0.0],
+        position: cgmath::Vector3::new(-1.0, 1.0, 0.0),
+        tex_coords: cgmath::Vector2::new(0.0, 0.0),
     },
 ];
 
@@ -71,11 +71,19 @@ impl DebugPass {
         device: &wgpu::Device,
         texture: &wgpu::TextureView,
         sampler: &wgpu::Sampler,
-        globals_bind_group_layout: &wgpu::BindGroupLayout
+        globals_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let mut verts = PLANE_VERTICES.clone();
+        for vert in &mut verts {
+            let new_pos = cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.75, 0.75, 0.0))
+                * cgmath::Matrix4::from_scale(0.25)
+                * vert.position.extend(1.0);
+            vert.position = new_pos.truncate();
+        }
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&PLANE_VERTICES),
+            contents: bytemuck::cast_slice(&verts),
             usage: wgpu::BufferUsage::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -255,10 +263,6 @@ pub fn save_texture(device: &wgpu::Device, width: u32, height: u32, texture: &wg
     let far = 100.0;
     std::thread::spawn(move || {
         use futures::executor::block_on;
-
-        //let mapping_future = buffer.map_read(0, buffer_size);
-        //let mapping = block_on(mapping_future).unwrap();
-        //let data = mapping.as_slice();
 
         let slice = buffer.slice(..);
         block_on(slice.map_async(wgpu::MapMode::Read)).unwrap();
