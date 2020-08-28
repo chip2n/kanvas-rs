@@ -1,4 +1,4 @@
-mod camera2;
+mod camera;
 mod debug;
 mod light;
 mod model;
@@ -78,9 +78,9 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     light_render_pipeline: wgpu::RenderPipeline,
     size: winit::dpi::PhysicalSize<u32>,
-    camera: camera2::Camera,
-    projection: camera2::PerspectiveProjection,
-    camera_controller: camera2::CameraController,
+    camera: camera::Camera,
+    projection: camera::PerspectiveProjection,
+    camera_controller: camera::CameraController,
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
@@ -143,15 +143,15 @@ impl State {
         let texture_bind_group_layout = texture::create_bind_group_layout(&device);
 
         let camera =
-            camera2::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
-        let projection = camera2::PerspectiveProjection::new(
+            camera::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let projection = camera::PerspectiveProjection::new(
             sc_desc.width,
             sc_desc.height,
             cgmath::Deg(45.0),
             0.1,
             100.0,
         );
-        let camera_controller = camera2::CameraController::new(4.0, 0.8);
+        let camera_controller = camera::CameraController::new(4.0, 0.8);
 
         let mut uniforms = uniform::Uniforms::new();
         uniforms.update_view_proj(&camera, &projection);

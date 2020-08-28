@@ -1,4 +1,4 @@
-use crate::camera2;
+use crate::camera;
 use wgpu::util::DeviceExt;
 
 // TODO rename to e.g. GlobalUniforms?
@@ -18,7 +18,7 @@ impl Uniforms {
         use cgmath::SquareMatrix;
 
         // TODO Hard coded light projection for now
-        let light_proj = camera2::OrthographicProjection::new().calc_matrix();
+        let light_proj = camera::OrthographicProjection::new().calc_matrix();
         let light_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(5.0, 10.0, 20.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
@@ -35,8 +35,8 @@ impl Uniforms {
     // TODO projection: Into<Matrix4>?
     pub fn update_view_proj(
         &mut self,
-        camera: &camera2::Camera,
-        projection: &camera2::PerspectiveProjection,
+        camera: &camera::Camera,
+        projection: &camera::PerspectiveProjection,
     ) {
         self.view_position = camera.position.to_homogeneous();
         self.view_proj = projection.calc_matrix() * camera.calc_matrix();
