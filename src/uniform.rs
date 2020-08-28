@@ -18,8 +18,8 @@ impl Uniforms {
         use cgmath::SquareMatrix;
 
         // TODO Hard coded light projection for now
-        let camera = camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0);
-        let light_proj = camera.calc_matrix();
+        let projection = camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0);
+        let light_proj = projection.calc_matrix();
         let light_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(5.0, 10.0, 20.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
