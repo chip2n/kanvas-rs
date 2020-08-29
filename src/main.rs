@@ -96,7 +96,7 @@ struct State {
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
-    shadow_pass: shadow::Pass,
+    shadow_pass: shadow::ShadowPass,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     save_texture: bool,
     debug_pass: debug::DebugPass,
@@ -157,6 +157,7 @@ impl State {
         uniforms.update_view_proj(&camera, &projection);
         let uniform_buffer = uniform::create_buffer(&device, &[uniforms]);
 
+        // TODO move to uniform.rs?
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -332,10 +333,9 @@ impl State {
             )
         };
 
-        let shadow_pass = shadow::Pass::new(
+        let shadow_pass = shadow::ShadowPass::new(
             &device,
             &mut shader_compiler,
-            &globals_bind_group_layout,
             &instances_bind_group_layout,
             &vertex_descs,
         );
@@ -631,13 +631,11 @@ impl State {
 
         {
             // shadow pass
-            let mut render_pass = self.shadow_pass.begin(encoder);
+            let mut pass = self.shadow_pass.begin(encoder);
             for mesh in &self.obj_model.meshes {
-                shadow::render(
-                    &mut render_pass,
+                pass.render(
                     shadow::ShadowPassRenderData::from_mesh(
                         &mesh,
-                        &self.globals_bind_group,
                         &self.instances_bind_group,
                     ),
                 );

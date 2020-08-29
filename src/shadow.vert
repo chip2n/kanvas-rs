@@ -2,9 +2,7 @@
 
 layout(location=0) in vec3 a_position;
 
-layout(set=0, binding=0) uniform Uniforms {
-  vec3 u_view_position; // TODO unnecessary
-  mat4 u_view_proj;     // TODO unnecessary
+layout(set=0, binding=0) uniform ShadowUniforms {
   mat4 u_light_proj;
 };
 
