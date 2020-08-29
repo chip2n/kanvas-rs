@@ -1,3 +1,4 @@
+use crate::camera;
 use crate::model;
 use crate::pipeline;
 use crate::{compile_frag, compile_vertex};
@@ -164,4 +165,75 @@ where
     render_pass.set_bind_group(0, &data.uniforms_bind_group, &[]);
     render_pass.set_bind_group(1, &data.instances_bind_group, &[]);
     render_pass.draw_indexed(data.indices, 0, data.instances);
+}
+
+pub enum ShadowMapLightType {
+    Directional,
+    Point,
+}
+
+pub fn create_light_proj(light_type: ShadowMapLightType) -> cgmath::Matrix4<f32> {
+    let light_proj = create_proj_mat(light_type);
+    let light_view = cgmath::Matrix4::look_at(
+        cgmath::Point3::new(5.0, 10.0, 20.0),
+        cgmath::Point3::new(0.0, 0.0, 0.0),
+        cgmath::Vector3::unit_y(),
+    );
+
+    light_proj * light_view
+}
+
+pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Matrix4<f32>> {
+    let light_proj = create_proj_mat(ShadowMapLightType::Point);
+    let transforms = vec![
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(1.0, 0.0, 0.0),
+                -cgmath::Vector3::unit_y(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(-1.0, 0.0, 0.0),
+                -cgmath::Vector3::unit_y(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, -1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 0.0, 1.0),
+                -cgmath::Vector3::unit_y(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 0.0, -1.0),
+                -cgmath::Vector3::unit_y(),
+            ),
+    ];
+    transforms
+}
+
+fn create_proj_mat(light_type: ShadowMapLightType) -> cgmath::Matrix4<f32> {
+    match light_type {
+        ShadowMapLightType::Directional => {
+            camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0).calc_matrix()
+        }
+        ShadowMapLightType::Point => {
+            camera::PerspectiveProjection::new(1024, 1024, cgmath::Deg(45.0), 0.1, 100.0)
+                .calc_matrix()
+        }
+    }
 }

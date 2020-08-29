@@ -1,4 +1,5 @@
 use crate::camera;
+use crate::shadow;
 use wgpu::util::DeviceExt;
 
 // TODO rename to e.g. GlobalUniforms?
@@ -17,19 +18,10 @@ impl Uniforms {
     pub fn new() -> Self {
         use cgmath::SquareMatrix;
 
-        // TODO Hard coded light projection for now
-        let projection = camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0);
-        let light_proj = projection.calc_matrix();
-        let light_view = cgmath::Matrix4::look_at(
-            cgmath::Point3::new(5.0, 10.0, 20.0),
-            cgmath::Point3::new(0.0, 0.0, 0.0),
-            cgmath::Vector3::unit_y(),
-        );
-
         Self {
             view_position: cgmath::Zero::zero(),
             view_proj: cgmath::Matrix4::identity(),
-            light_proj: light_proj * light_view,
+            light_proj: shadow::create_light_proj(shadow::ShadowMapLightType::Point),
         }
     }
 
