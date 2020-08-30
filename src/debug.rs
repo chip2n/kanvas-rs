@@ -1,5 +1,5 @@
 use crate::model::Vertex;
-use crate::shader;
+use crate::{compile_frag, compile_vertex};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -140,15 +140,8 @@ impl DebugPass {
                 bind_group_layouts: &[&texture_bind_group_layout, globals_bind_group_layout],
             });
 
-            let vs_src = include_str!("debug.vert");
-            let fs_src = include_str!("debug.frag");
-
-            let vs_module =
-                shader::create_vertex_module(device, &mut shader_compiler, vs_src, "debug.vert")
-                    .unwrap();
-            let fs_module =
-                shader::create_fragment_module(device, &mut shader_compiler, fs_src, "debug.frag")
-                    .unwrap();
+            let vs_module = compile_vertex!(&device, &mut shader_compiler, "debug.vert").unwrap();
+            let fs_module = compile_frag!(&device, &mut shader_compiler, "debug.frag").unwrap();
 
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("debug"),

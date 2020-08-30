@@ -1,15 +1,25 @@
 #[macro_export]
 macro_rules! compile_vertex {
     ($device:expr, $compiler:expr, $path:expr) => {
-        crate::shader::create_vertex_module($device, $compiler, include_str!($path), $path);
-    }
+        crate::shader::create_vertex_module(
+            $device,
+            $compiler,
+            include_str!(concat!("../res/shaders/", $path)),
+            $path,
+        );
+    };
 }
 
 #[macro_export]
 macro_rules! compile_frag {
     ($device:expr, $compiler:expr, $path:expr) => {
-        crate::shader::create_fragment_module($device, $compiler, include_str!($path), $path);
-    }
+        crate::shader::create_fragment_module(
+            $device,
+            $compiler,
+            include_str!(concat!("../res/shaders/", $path)),
+            $path,
+        );
+    };
 }
 
 pub fn create_vertex_module(
