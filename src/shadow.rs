@@ -105,7 +105,17 @@ impl ShadowPass {
             vertex_descs.clone(),
         );
 
-        let sampler = create_sampler(device);
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
+            ..Default::default()
+        });
 
         Self {
             pipeline,
@@ -145,7 +155,10 @@ impl ShadowPass {
 
         render_pass.set_pipeline(&self.pipeline);
 
-        ShadowPassRunner { render_pass, uniforms_bind_group: &self.uniforms_bind_group }
+        ShadowPassRunner {
+            render_pass,
+            uniforms_bind_group: &self.uniforms_bind_group,
+        }
     }
 }
 
@@ -159,26 +172,17 @@ impl<'a> ShadowPassRunner<'a> {
     where
         'b: 'a,
     {
-        self.render_pass.set_vertex_buffer(0, data.vertex_buffer.slice(..));
-        self.render_pass.set_index_buffer(data.index_buffer.slice(..));
-        self.render_pass.set_bind_group(0, &self.uniforms_bind_group, &[]);
-        self.render_pass.set_bind_group(1, &data.instances_bind_group, &[]);
-        self.render_pass.draw_indexed(data.indices, 0, data.instances);
+        self.render_pass
+            .set_vertex_buffer(0, data.vertex_buffer.slice(..));
+        self.render_pass
+            .set_index_buffer(data.index_buffer.slice(..));
+        self.render_pass
+            .set_bind_group(0, &self.uniforms_bind_group, &[]);
+        self.render_pass
+            .set_bind_group(1, &data.instances_bind_group, &[]);
+        self.render_pass
+            .draw_indexed(data.indices, 0, data.instances);
     }
-}
-
-fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-    device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("shadow"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        compare: None,
-        ..Default::default()
-    })
 }
 
 pub struct ShadowPassRenderData<'a> {
@@ -190,10 +194,7 @@ pub struct ShadowPassRenderData<'a> {
 }
 
 impl<'a> ShadowPassRenderData<'a> {
-    pub fn from_mesh(
-        mesh: &'a model::Mesh,
-        instances_bind_group: &'a wgpu::BindGroup,
-    ) -> Self {
+    pub fn from_mesh(mesh: &'a model::Mesh, instances_bind_group: &'a wgpu::BindGroup) -> Self {
         Self {
             vertex_buffer: &mesh.vertex_buffer,
             index_buffer: &mesh.index_buffer,
