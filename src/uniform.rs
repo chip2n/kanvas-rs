@@ -1,5 +1,4 @@
 use crate::camera;
-use crate::shadow;
 use wgpu::util::DeviceExt;
 
 // TODO rename to e.g. GlobalUniforms?
@@ -8,7 +7,6 @@ use wgpu::util::DeviceExt;
 pub struct Uniforms {
     pub view_position: cgmath::Vector4<f32>,
     pub view_proj: cgmath::Matrix4<f32>,
-    pub light_proj: cgmath::Matrix4<f32>,
 }
 
 unsafe impl bytemuck::Pod for Uniforms {}
@@ -21,7 +19,6 @@ impl Uniforms {
         Self {
             view_position: cgmath::Zero::zero(),
             view_proj: cgmath::Matrix4::identity(),
-            light_proj: shadow::create_light_proj(shadow::ShadowMapLightType::Point),
         }
     }
 

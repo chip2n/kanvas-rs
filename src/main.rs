@@ -142,8 +142,7 @@ impl State {
         // We create a BindGroup using a BindGroupLayout.
         let texture_bind_group_layout = texture::create_bind_group_layout(&device);
 
-        let camera =
-            camera::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera = camera::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection = camera::PerspectiveProjection::new(
             sc_desc.width,
             sc_desc.height,
@@ -260,12 +259,12 @@ impl State {
             label: Some("plane_instances_bind_group"),
         });
 
-        let light = light::Light::new((1.5, 4.5, 1.5).into(), (1.0, 1.0, 1.0).into());
+        let light = light::Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
 
         // We'll want to update our lights position, so we use COPY_DST
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Lights"),
-            contents: bytemuck::cast_slice(&[light]),
+            contents: bytemuck::cast_slice(&[light.to_raw()]),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
 
@@ -278,7 +277,7 @@ impl State {
                         ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(
-                                mem::size_of::<light::Light>() as _
+                                mem::size_of::<light::LightRaw>() as _,
                             ),
                         },
                         count: None,
@@ -563,7 +562,7 @@ impl State {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Staging"),
-                contents: bytemuck::cast_slice(&[self.light]),
+                contents: bytemuck::cast_slice(&[self.light.to_raw()]),
                 usage: wgpu::BufferUsage::COPY_SRC,
             });
         encoder.copy_buffer_to_buffer(
@@ -571,8 +570,10 @@ impl State {
             0,
             &self.light_buffer,
             0,
-            std::mem::size_of::<light::Light>() as wgpu::BufferAddress,
+            std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
+
+        self.shadow_pass.update_lights(&self.queue, &[&self.light]);
 
         // We need to remember to submit our CommandEncoder's output
         // otherwise we won't see any change.
@@ -633,12 +634,10 @@ impl State {
             // shadow pass
             let mut pass = self.shadow_pass.begin(encoder);
             for mesh in &self.obj_model.meshes {
-                pass.render(
-                    shadow::ShadowPassRenderData::from_mesh(
-                        &mesh,
-                        &self.instances_bind_group,
-                    ),
-                );
+                pass.render(shadow::ShadowPassRenderData::from_mesh(
+                    &mesh,
+                    &self.instances_bind_group,
+                ));
             }
         }
 

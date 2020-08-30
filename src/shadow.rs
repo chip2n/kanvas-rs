@@ -1,4 +1,5 @@
 use crate::camera;
+use crate::light;
 use crate::model;
 use crate::pipeline;
 use crate::{compile_frag, compile_vertex};
@@ -57,8 +58,13 @@ impl ShadowPass {
             array_layer_count: NonZeroU32::new(1),
         });
 
+        let uniforms_size = (MAX_LIGHTS * mem::size_of::<ShadowUniforms>()) as wgpu::BufferAddress;
         let uniforms = ShadowUniforms::new();
-        let uniforms_buffer = create_buffer(device, &[uniforms]);
+        let uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Shadow uniforms"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        });
         let uniforms_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -66,9 +72,7 @@ impl ShadowPass {
                     visibility: wgpu::ShaderStage::VERTEX,
                     ty: wgpu::BindingType::UniformBuffer {
                         dynamic: false,
-                        min_binding_size: wgpu::BufferSize::new(
-                            mem::size_of::<ShadowUniforms>() as _
-                        ),
+                        min_binding_size: wgpu::BufferSize::new(uniforms_size),
                     },
                     count: None,
                 }],
@@ -160,6 +164,19 @@ impl ShadowPass {
             uniforms_bind_group: &self.uniforms_bind_group,
         }
     }
+
+    pub fn update_lights(&self, queue: &wgpu::Queue, lights: &[&light::Light]) {
+        for (i, light) in lights.iter().enumerate() {
+            let uniforms = ShadowUniforms {
+                light_proj: light.to_raw().proj,
+            };
+            queue.write_buffer(
+                &self.uniforms_buffer,
+                (i * mem::size_of::<ShadowUniforms>()) as wgpu::BufferAddress,
+                bytemuck::bytes_of(&uniforms),
+            );
+        }
+    }
 }
 
 pub struct ShadowPassRunner<'a> {
@@ -205,15 +222,10 @@ impl<'a> ShadowPassRenderData<'a> {
     }
 }
 
-pub enum ShadowMapLightType {
-    Directional,
-    Point,
-}
-
-pub fn create_light_proj(light_type: ShadowMapLightType) -> cgmath::Matrix4<f32> {
-    let light_proj = create_proj_mat(light_type);
+pub fn create_light_proj(light: &light::Light) -> cgmath::Matrix4<f32> {
+    let light_proj = create_proj_mat(&light.light_type);
     let light_view = cgmath::Matrix4::look_at(
-        cgmath::Point3::new(5.0, 10.0, 20.0),
+        cgmath::EuclideanSpace::from_vec(light.position),
         cgmath::Point3::new(0.0, 0.0, 0.0),
         cgmath::Vector3::unit_y(),
     );
@@ -222,7 +234,7 @@ pub fn create_light_proj(light_type: ShadowMapLightType) -> cgmath::Matrix4<f32>
 }
 
 pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Matrix4<f32>> {
-    let light_proj = create_proj_mat(ShadowMapLightType::Point);
+    let light_proj = create_proj_mat(&light::LightType::Point);
     let transforms = vec![
         light_proj
             * cgmath::Matrix4::look_at(
@@ -264,12 +276,12 @@ pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Mat
     transforms
 }
 
-fn create_proj_mat(light_type: ShadowMapLightType) -> cgmath::Matrix4<f32> {
+fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
     match light_type {
-        ShadowMapLightType::Directional => {
+        light::LightType::Directional => {
             camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0).calc_matrix()
         }
-        ShadowMapLightType::Point => {
+        light::LightType::Point => {
             camera::PerspectiveProjection::new(1024, 1024, cgmath::Deg(45.0), 0.1, 100.0)
                 .calc_matrix()
         }
@@ -287,16 +299,11 @@ unsafe impl bytemuck::Zeroable for ShadowUniforms {}
 
 impl ShadowUniforms {
     pub fn new() -> Self {
+        let light = light::Light::new((5.0, 10.0, 20.0), (1.0, 1.0, 1.0));
         Self {
-            light_proj: create_light_proj(ShadowMapLightType::Point),
+            light_proj: create_light_proj(&light),
         }
     }
 }
 
-pub fn create_buffer(device: &wgpu::Device, uniforms: &[ShadowUniforms]) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Shadow uniforms"),
-        contents: bytemuck::cast_slice(uniforms),
-        usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-    })
 }

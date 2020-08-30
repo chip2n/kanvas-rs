@@ -1,27 +1,52 @@
 use crate::model;
+use crate::shadow;
 use std::ops::Range;
+
+pub struct Light {
+    pub position: cgmath::Vector3<f32>,
+    pub color: cgmath::Vector3<f32>,
+    pub light_type: LightType,
+}
+
+impl Light {
+    pub fn new<P: Into<cgmath::Vector3<f32>>, C: Into<cgmath::Vector3<f32>>>(
+        position: P,
+        color: C,
+    ) -> Self {
+        Light {
+            position: position.into(),
+            color: color.into(),
+            light_type: LightType::Point,
+        }
+    }
+
+    pub fn to_raw(&self) -> LightRaw {
+        LightRaw {
+            proj: shadow::create_light_proj(self),
+            position: self.position,
+            _padding: 0,
+            color: self.color,
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct Light {
+pub struct LightRaw {
+    pub proj: cgmath::Matrix4<f32>,
     pub position: cgmath::Vector3<f32>,
     // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
     _padding: u32,
     pub color: cgmath::Vector3<f32>,
 }
 
-impl Light {
-    pub fn new(position: cgmath::Vector3<f32>, color: cgmath::Vector3<f32>) -> Self {
-        Light {
-            position,
-            _padding: 0,
-            color,
-        }
-    }
+pub enum LightType {
+    Directional,
+    Point,
 }
 
-unsafe impl bytemuck::Zeroable for Light {}
-unsafe impl bytemuck::Pod for Light {}
+unsafe impl bytemuck::Zeroable for LightRaw {}
+unsafe impl bytemuck::Pod for LightRaw {}
 
 pub trait DrawLight<'a, 'b>
 where

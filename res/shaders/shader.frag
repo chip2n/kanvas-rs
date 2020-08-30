@@ -16,6 +16,7 @@ layout(set = 0, binding = 1) uniform sampler s_diffuse;
 layout(set = 0, binding = 2) uniform texture2D t_normal;
 layout(set = 0, binding = 3) uniform sampler s_normal;
 layout(set = 3, binding = 0) uniform Light {
+  mat4 u_light_proj;
   vec3 light_position;
   vec3 light_color;
 };

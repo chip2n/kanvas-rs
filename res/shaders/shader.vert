@@ -15,7 +15,6 @@ layout(location=4) out vec4 v_position_light_space;
 layout(set=1, binding=0) uniform Globals {
   vec3 u_view_position; // world space
   mat4 u_view_proj;
-  mat4 u_light_proj;
 };
 
 layout(set=2, binding=0) buffer Instances {
@@ -23,6 +22,7 @@ layout(set=2, binding=0) buffer Instances {
 };
 
 layout(set=3, binding=0) uniform Light {
+  mat4 u_light_proj;
   vec3 light_position; // world space
   vec3 light_color;
 };
