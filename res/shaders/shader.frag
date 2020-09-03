@@ -28,32 +28,32 @@ layout(set = 3, binding = 2) uniform sampler shadow_map;
 float z_near = 0.1;
 float z_far = 100;
 
-/*
-float pcf(vec2 coords, float current_depth, ivec2 texture_size) {
-  float shadow = 0.0;
-  vec2 texel_size = 1.0 / texture_size;
-  for(int x = -1; x <= 1; ++x) {
-      for(int y = -1; y <= 1; ++y) {
-          float pcf_depth = texture(sampler2D(shadow_tex, shadow_map), coords + vec2(x, -y) * texel_size).r;
-          shadow += current_depth > pcf_depth ? 1.0 : 0.0;
-      }
-  }
-  shadow /= 9.0;
-  return shadow;
-}
-*/
 
 float calculate_shadow() {
   vec3 frag_to_light = v_position_world_space - light_position;
   frag_to_light *= vec3(1, 1, -1); // TODO Not sure why this is needed
-  float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light).r;
-
-  closest_depth *= z_far;
 
   float current_depth = length(frag_to_light);
 
-  float bias = 0.05;
-  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
+  // Do PCF for smoother shadows
+
+  float shadow = 0.0;
+  float bias = 0.20;
+  float samples = 4.0;
+  float offset = 0.1;
+
+  for(float x = -offset; x < offset; x += offset / (samples * 0.5)) {
+    for(float y = -offset; y < offset; y += offset / (samples * 0.5)) {
+      for(float z = -offset; z < offset; z += offset / (samples * 0.5)) {
+        float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light + vec3(x, y, z)).r;
+        closest_depth *= z_far;
+        if (current_depth - bias > closest_depth) {
+          shadow += 1.0;
+        }
+      }
+    }
+  }
+  shadow /= (samples * samples * samples);
 
   return shadow;
 }
