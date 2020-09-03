@@ -177,7 +177,11 @@ impl State {
             layout: &globals_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(uniform_buffer.slice(..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &uniform_buffer,
+                    offset: 0,
+                    size: None,
+                },
             }],
             label: Some("globals_bind_group"),
         });
@@ -222,7 +226,11 @@ impl State {
             layout: &instances_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(instance_buffer.slice(..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &instance_buffer,
+                    offset: 0,
+                    size: None,
+                },
             }],
             label: Some("instances_bind_group"),
         });
@@ -254,7 +262,11 @@ impl State {
             layout: &instances_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(plane_instance_buffer.slice(..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &plane_instance_buffer,
+                    offset: 0,
+                    size: None,
+                },
             }],
             label: Some("plane_instances_bind_group"),
         });
@@ -339,16 +351,21 @@ impl State {
             &vertex_descs,
         );
 
+        // TODO do some of this in shadow pass?
         let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &light_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(light_buffer.slice(..)),
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &light_buffer,
+                        offset: 0,
+                        size: None,
+                    },
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&shadow_pass.target_view),
+                    resource: wgpu::BindingResource::TextureView(&shadow_pass.cube_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -399,7 +416,7 @@ impl State {
 
         let debug_pass = debug::DebugPass::new(
             &device,
-            &shadow_pass.target_view,
+            &shadow_pass.targets[0].1,
             &shadow_pass.sampler,
             &globals_bind_group_layout,
         );
@@ -573,7 +590,7 @@ impl State {
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
 
-        self.shadow_pass.update_lights(&self.queue, &[&self.light]);
+        self.shadow_pass.update_light(&self.queue, &self.light);
 
         // We need to remember to submit our CommandEncoder's output
         // otherwise we won't see any change.
@@ -597,7 +614,7 @@ impl State {
         self.queue.submit(iter::once(encoder.finish()));
 
         if self.save_texture {
-            debug::save_texture(&self.device, 1024, 1024, &self.shadow_pass.texture);
+            debug::save_texture(&self.device, 1024, 1024, &self.shadow_pass.targets[0].0);
             self.save_texture = false;
         }
     }
@@ -630,16 +647,17 @@ impl State {
             depth_stencil_attachment: None,
         });
 
-        {
+        for face_index in 0..6 {
             // shadow pass
-            let mut pass = self.shadow_pass.begin(encoder);
+            let mut pass = self.shadow_pass.begin(encoder, face_index);
             for mesh in &self.obj_model.meshes {
-                pass.render(shadow::ShadowPassRenderData::from_mesh(
-                    &mesh,
-                    &self.instances_bind_group,
-                ));
+                pass.render(
+                    shadow::ShadowPassRenderData::from_mesh(&mesh, &self.instances_bind_group),
+                    face_index,
+                );
             }
         }
+        self.shadow_pass.copy_to_cubemap(encoder);
 
         {
             // forward pass

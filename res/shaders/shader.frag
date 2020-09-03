@@ -8,6 +8,7 @@ layout(location=1) in vec3 v_light_position; // tangent space
 layout(location=2) in vec3 v_view_position;  // tangent space
 layout(location=3) in vec2 v_tex_coords;
 layout(location=4) in vec4 v_position_light_space;
+layout(location=5) in vec3 v_position_world_space;
 
 layout(location=0) out vec4 f_color;
 
@@ -20,9 +21,14 @@ layout(set = 3, binding = 0) uniform Light {
   vec3 light_position;
   vec3 light_color;
 };
-layout(set = 3, binding = 1) uniform texture2D shadow_tex;
+layout(set = 3, binding = 1) uniform textureCube shadow_tex;
 layout(set = 3, binding = 2) uniform sampler shadow_map;
 
+//float z_near = 0.1;
+float z_near = 0.1;
+float z_far = 100;
+
+/*
 float pcf(vec2 coords, float current_depth, ivec2 texture_size) {
   float shadow = 0.0;
   vec2 texel_size = 1.0 / texture_size;
@@ -35,34 +41,19 @@ float pcf(vec2 coords, float current_depth, ivec2 texture_size) {
   shadow /= 9.0;
   return shadow;
 }
+*/
 
 float calculate_shadow() {
-  // perform perspective divide
-  vec3 proj_coords = v_position_light_space.xyz / v_position_light_space.w;
+  vec3 frag_to_light = v_position_world_space - light_position;
+  frag_to_light *= vec3(1, 1, -1); // TODO Not sure why this is needed
+  float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light).r;
 
-  // x and y is [-1, 1] in light space - we need it in [0,1] to be valid tex coords
-  // positive y is up in light space, but down in tex coords, so flip it
-  // z is [0, 1], so leave it unchanged
-  proj_coords = vec3(proj_coords.x * 0.5 + 0.5, -proj_coords.y * 0.5 + 0.5, proj_coords.z);
+  closest_depth *= z_far;
 
-  // if we're looking outside the shadow map, don't do any shadowing
-  ivec2 size = textureSize(sampler2D(shadow_tex, shadow_map), 0);
-  if (proj_coords.y > size.y || proj_coords.y < 0) {
-    return 0.0;
-  }
-  if (proj_coords.x > size.x || proj_coords.x < 0) {
-    return 0.0;
-  }
+  float current_depth = length(frag_to_light);
 
-  // get depth of current fragment from light's perspective
-  float current_depth = proj_coords.z;
-
-  // if outside light's frustum, don't do any shadowing
-  if (current_depth > 1.0) {
-    return 0.0;
-  }
-
-  float shadow = pcf(proj_coords.xy, current_depth, size);
+  float bias = 0.05;
+  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
 
   return shadow;
 }
@@ -93,7 +84,6 @@ void main() {
 
   // calculate shadow
   float shadow = calculate_shadow();
-  //float shadow = 0.0;
 
   vec3 result = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
   
