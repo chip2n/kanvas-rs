@@ -42,17 +42,19 @@ impl ShadowPass {
         let uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Shadow uniforms"),
             // TODO Skip filling buffer on initialization
-            contents: bytemuck::cast_slice(&[
+            contents: bytemuck::cast_slice(
+                &[
                 //uniforms, uniforms, uniforms, uniforms, uniforms, uniforms,
                 0; 256 * 6
-            ]),
+            ],
+            ),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
         let uniforms_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX,
+                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer {
                         dynamic: true,
                         // TODO use correct value for performance
@@ -241,7 +243,10 @@ impl ShadowPass {
     pub fn update_light(&self, queue: &wgpu::Queue, light: &light::Light) {
         let projections = create_light_proj_cube(cgmath::EuclideanSpace::from_vec(light.position));
         for (i, proj) in projections.iter().enumerate() {
-            let uniforms = ShadowUniforms { light_proj: *proj };
+            let uniforms = ShadowUniforms {
+                light_proj: *proj,
+                light_position: light.position,
+            };
             queue.write_buffer(
                 &self.uniforms_buffer,
                 (i * wgpu::BIND_BUFFER_ALIGNMENT as usize) as wgpu::BufferAddress,
@@ -405,6 +410,7 @@ fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
 #[derive(Copy, Clone)]
 pub struct ShadowUniforms {
     pub light_proj: cgmath::Matrix4<f32>,
+    pub light_position: cgmath::Vector3<f32>,
 }
 
 unsafe impl bytemuck::Pod for ShadowUniforms {}
@@ -415,6 +421,7 @@ impl ShadowUniforms {
         let light = light::Light::new((5.0, 10.0, 20.0), (1.0, 1.0, 1.0));
         Self {
             light_proj: create_light_proj(&light),
+            light_position: light.position,
         }
     }
 }

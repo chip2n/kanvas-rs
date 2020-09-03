@@ -43,38 +43,19 @@ float pcf(vec2 coords, float current_depth, ivec2 texture_size) {
 }
 */
 
-/*
-float linearize_depth(float d) {
-  return z_near * z_far / (z_far + d * (z_near - z_far));
-}
-*/
-
-float linearize_depth(float depth) {
-    float z = depth * 2.0 - 1.0; // Back to NDC
-    return (2.0 * z_near * z_far) / (z_far + z_near - z * (z_far - z_near));
-}
-
-// TODO check https://www.programmersought.com/article/20404821294/
 float calculate_shadow() {
   vec3 frag_to_light = v_position_world_space - light_position;
-  frag_to_light *= vec3(1, 1, -1); // Not sure why this is needed
+  frag_to_light *= vec3(1, 1, -1); // TODO Not sure why this is needed
   float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light).r;
 
-  //closest_depth *= z_far;
-  closest_depth = linearize_depth(closest_depth);
+  closest_depth *= z_far;
 
   float current_depth = length(frag_to_light);
 
-  float shadow = current_depth > closest_depth ? 1.0 : 0.0;
+  float bias = 0.05;
+  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
 
   return shadow;
-}
-
-float calculate_shadow_debug() {
-  vec3 frag_to_light = v_position_world_space - light_position;
-  frag_to_light *= vec3(1, 1, -1);
-  float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light).r;
-  return linearize_depth(closest_depth) / z_far;
 }
 
 void main() {
@@ -107,8 +88,4 @@ void main() {
   vec3 result = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
   
   f_color = vec4(result, object_color.a);
-
-
-  //float depth = calculate_shadow_debug();
-  //f_color = vec4(vec3(depth), 1.0);
 }

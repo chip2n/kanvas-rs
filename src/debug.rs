@@ -104,7 +104,7 @@ impl DebugPass {
                         ty: wgpu::BindingType::SampledTexture {
                             multisampled: false,
                             dimension: wgpu::TextureViewDimension::D2,
-                            component_type: wgpu::TextureComponentType::Uint,
+                            component_type: wgpu::TextureComponentType::Float,
                         },
                         count: None,
                     },
