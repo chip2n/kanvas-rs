@@ -21,11 +21,12 @@ const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
 
 pub struct ShadowPass {
     pub pipeline: wgpu::RenderPipeline,
-    pub target_view: wgpu::TextureView,
-    pub texture: wgpu::Texture,
     pub sampler: wgpu::Sampler,
     pub uniforms_buffer: wgpu::Buffer,
     pub uniforms_bind_group: wgpu::BindGroup,
+    pub cube_texture: wgpu::Texture,
+    pub cube_texture_view: wgpu::TextureView,
+    pub targets: Vec<(wgpu::Texture, wgpu::TextureView)>,
 }
 
 impl ShadowPass {
@@ -35,34 +36,16 @@ impl ShadowPass {
         instances_bind_group_layout: &wgpu::BindGroupLayout,
         vertex_descs: &[wgpu::VertexBufferDescriptor],
     ) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: SHADOW_SIZE,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: SHADOW_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
-                | wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::COPY_SRC,
-            label: None,
-        });
-
-        let target_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("Shadow"),
-            format: None,
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            level_count: None,
-            base_array_layer: 0,
-            array_layer_count: NonZeroU32::new(1),
-        });
-
-        let uniforms_size = (MAX_LIGHTS * mem::size_of::<ShadowUniforms>()) as wgpu::BufferAddress;
+        // Make room for all 6 sides of cubemap
+        let uniforms_size = (6 * wgpu::BIND_BUFFER_ALIGNMENT) as wgpu::BufferAddress;
         let uniforms = ShadowUniforms::new();
         let uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Shadow uniforms"),
-            contents: bytemuck::cast_slice(&[uniforms]),
+            // TODO Skip filling buffer on initialization
+            contents: bytemuck::cast_slice(&[
+                //uniforms, uniforms, uniforms, uniforms, uniforms, uniforms,
+                0; 256 * 6
+            ]),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
         let uniforms_bind_group_layout =
@@ -71,8 +54,9 @@ impl ShadowPass {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
                     ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                        min_binding_size: wgpu::BufferSize::new(uniforms_size),
+                        dynamic: true,
+                        // TODO use correct value for performance
+                        min_binding_size: None,
                     },
                     count: None,
                 }],
@@ -83,7 +67,11 @@ impl ShadowPass {
             layout: &uniforms_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(uniforms_buffer.slice(..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &uniforms_buffer,
+                    offset: 0,
+                    size: core::num::NonZeroU64::new(std::mem::size_of::<ShadowUniforms>() as u64),
+                },
             }],
             label: Some("Shadow uniforms bind group"),
         });
@@ -121,22 +109,107 @@ impl ShadowPass {
             ..Default::default()
         });
 
+        let cube_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 1024,
+                height: 1024,
+                depth: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: SHADOW_FORMAT,
+            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            label: None,
+        });
+
+        let cube_texture_view = cube_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Shadow"),
+            format: None,
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            level_count: None,
+            base_array_layer: 0,
+            array_layer_count: NonZeroU32::new(1),
+        });
+
+        let targets: Vec<(wgpu::Texture, wgpu::TextureView)> = (0..6)
+            .map(|_| {
+                let texture = device.create_texture(&wgpu::TextureDescriptor {
+                    size: SHADOW_SIZE,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: SHADOW_FORMAT,
+                    usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
+                        | wgpu::TextureUsage::SAMPLED
+                        | wgpu::TextureUsage::COPY_SRC,
+                    label: None,
+                });
+
+                let target_view = texture.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("Shadow"),
+                    format: None,
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: 0,
+                    level_count: None,
+                    base_array_layer: 0,
+                    array_layer_count: NonZeroU32::new(1),
+                });
+
+                (texture, target_view)
+            })
+            .collect();
+
         Self {
             pipeline,
-            target_view,
-            texture,
             sampler,
             uniforms_buffer,
             uniforms_bind_group,
+            cube_texture,
+            cube_texture_view,
+            targets,
         }
     }
 
-    pub fn begin<'a>(&'a self, encoder: &'a mut wgpu::CommandEncoder) -> ShadowPassRunner<'a> {
+    pub fn copy_to_cubemap(&self, encoder: &mut wgpu::CommandEncoder) {
+        for (i, (texture, texture_view)) in self.targets.iter().enumerate() {
+            encoder.copy_texture_to_texture(
+                wgpu::TextureCopyView {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                },
+                wgpu::TextureCopyView {
+                    texture: &self.cube_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: i as u32,
+                    },
+                },
+                wgpu::Extent3d {
+                    width: 1024,
+                    height: 1024,
+                    depth: 1,
+                },
+            );
+        }
+    }
+
+    pub fn begin<'a>(
+        &'a self,
+        encoder: &'a mut wgpu::CommandEncoder,
+        face_index: usize,
+    ) -> ShadowPassRunner<'a> {
         // Clear depth buffer
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: &self.target_view,
+                attachment: &self.targets[face_index].1,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: true,
@@ -148,7 +221,7 @@ impl ShadowPass {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: &self.target_view,
+                attachment: &self.targets[face_index].1,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
@@ -165,14 +238,13 @@ impl ShadowPass {
         }
     }
 
-    pub fn update_lights(&self, queue: &wgpu::Queue, lights: &[&light::Light]) {
-        for (i, light) in lights.iter().enumerate() {
-            let uniforms = ShadowUniforms {
-                light_proj: light.to_raw().proj,
-            };
+    pub fn update_light(&self, queue: &wgpu::Queue, light: &light::Light) {
+        let projections = create_light_proj_cube(cgmath::EuclideanSpace::from_vec(light.position));
+        for (i, proj) in projections.iter().enumerate() {
+            let uniforms = ShadowUniforms { light_proj: *proj };
             queue.write_buffer(
                 &self.uniforms_buffer,
-                (i * mem::size_of::<ShadowUniforms>()) as wgpu::BufferAddress,
+                (i * wgpu::BIND_BUFFER_ALIGNMENT as usize) as wgpu::BufferAddress,
                 bytemuck::bytes_of(&uniforms),
             );
         }
@@ -185,7 +257,7 @@ pub struct ShadowPassRunner<'a> {
 }
 
 impl<'a> ShadowPassRunner<'a> {
-    pub fn render<'b>(&mut self, data: ShadowPassRenderData<'b>)
+    pub fn render<'b>(&mut self, data: ShadowPassRenderData<'b>, face_index: usize)
     where
         'b: 'a,
     {
@@ -193,8 +265,11 @@ impl<'a> ShadowPassRunner<'a> {
             .set_vertex_buffer(0, data.vertex_buffer.slice(..));
         self.render_pass
             .set_index_buffer(data.index_buffer.slice(..));
-        self.render_pass
-            .set_bind_group(0, &self.uniforms_bind_group, &[]);
+        self.render_pass.set_bind_group(
+            0,
+            &self.uniforms_bind_group,
+            &[(face_index * wgpu::BIND_BUFFER_ALIGNMENT as usize) as wgpu::DynamicOffset],
+        );
         self.render_pass
             .set_bind_group(1, &data.instances_bind_group, &[]);
         self.render_pass
@@ -236,17 +311,55 @@ pub fn create_light_proj(light: &light::Light) -> cgmath::Matrix4<f32> {
 pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Matrix4<f32>> {
     let light_proj = create_proj_mat(&light::LightType::Point);
     let transforms = vec![
+        /*
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, -1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        light_proj
+            * cgmath::Matrix4::look_at(
+                light_pos,
+                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                -cgmath::Vector3::unit_z(),
+            ),
+        */
         light_proj
             * cgmath::Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(1.0, 0.0, 0.0),
-                -cgmath::Vector3::unit_y(),
+                cgmath::Vector3::unit_y(),
             ),
         light_proj
             * cgmath::Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(-1.0, 0.0, 0.0),
-                -cgmath::Vector3::unit_y(),
+                cgmath::Vector3::unit_y(),
             ),
         light_proj
             * cgmath::Matrix4::look_at(
@@ -263,14 +376,14 @@ pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Mat
         light_proj
             * cgmath::Matrix4::look_at(
                 light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 0.0, 1.0),
-                -cgmath::Vector3::unit_y(),
+                light_pos + cgmath::Vector3::new(0.0, 0.0, -1.0),
+                cgmath::Vector3::unit_y(),
             ),
         light_proj
             * cgmath::Matrix4::look_at(
                 light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 0.0, -1.0),
-                -cgmath::Vector3::unit_y(),
+                light_pos + cgmath::Vector3::new(0.0, 0.0, 1.0),
+                cgmath::Vector3::unit_y(),
             ),
     ];
     transforms
@@ -282,7 +395,7 @@ fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
             camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0).calc_matrix()
         }
         light::LightType::Point => {
-            camera::PerspectiveProjection::new(1024, 1024, cgmath::Deg(45.0), 0.1, 100.0)
+            camera::PerspectiveProjection::new(1024, 1024, cgmath::Deg(90.0), 0.1, 100.0)
                 .calc_matrix()
         }
     }
@@ -306,4 +419,30 @@ impl ShadowUniforms {
     }
 }
 
+struct DynamicLight {
+    proj: cgmath::Matrix4<f32>,
+    position: cgmath::Vector3<f32>,
+    _padding: u32, // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
+    color: cgmath::Vector3<f32>,
+}
+
+fn test(
+    device: &wgpu::Device,
+    encoder: &mut wgpu::CommandEncoder,
+    uniforms_buffer: wgpu::Buffer,
+    uniforms: ShadowUniforms,
+) {
+    let staging_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Staging"),
+        contents: bytemuck::cast_slice(&[uniforms]),
+        usage: wgpu::BufferUsage::COPY_SRC,
+    });
+
+    encoder.copy_buffer_to_buffer(
+        &staging_buffer,
+        0,
+        &uniforms_buffer,
+        0,
+        std::mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress,
+    );
 }
