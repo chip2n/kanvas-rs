@@ -9,6 +9,9 @@ layout(set=0, binding=0) uniform ShadowUniforms {
 
 float z_far = 100;
 
+// We store the linear distance to the fragment position from the light position
+// to make calculations easier later.
+
 void main() {
   // get distance between fragment and light source
   float light_distance = length(frag_pos.xyz - light_position);
