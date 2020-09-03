@@ -28,6 +28,13 @@ layout(set = 3, binding = 2) uniform sampler shadow_map;
 float z_near = 0.1;
 float z_far = 100;
 
+vec3 sample_offset_directions[20] = vec3[](
+   vec3( 1,  1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1,  1,  1),
+   vec3( 1,  1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1,  1, -1),
+   vec3( 1,  1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1,  1,  0),
+   vec3( 1,  0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1,  0, -1),
+   vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
+);
 
 float calculate_shadow() {
   vec3 frag_to_light = v_position_world_space - light_position;
@@ -38,22 +45,22 @@ float calculate_shadow() {
   // Do PCF for smoother shadows
 
   float shadow = 0.0;
-  float bias = 0.20;
-  float samples = 4.0;
-  float offset = 0.1;
+  float bias = 0.15;
+  int samples = 20;
+  float view_distance = length(v_view_position - v_position_world_space);
 
-  for(float x = -offset; x < offset; x += offset / (samples * 0.5)) {
-    for(float y = -offset; y < offset; y += offset / (samples * 0.5)) {
-      for(float z = -offset; z < offset; z += offset / (samples * 0.5)) {
-        float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light + vec3(x, y, z)).r;
-        closest_depth *= z_far;
-        if (current_depth - bias > closest_depth) {
-          shadow += 1.0;
-        }
-      }
+  // By letting the disk radius depend on view distance, we get softer shadows when far away
+  // and sharper shadows when close by
+  float disk_radius = (1.0 + (view_distance / z_far)) / 25.0;
+
+  for (int i = 0; i < samples; ++i) {
+    float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light + sample_offset_directions[i] * disk_radius).r;
+    closest_depth *= z_far; // undo linear [0,1] mapping done in shadow pass fragment stage
+    if (current_depth - bias > closest_depth) {
+      shadow += 1.0;
     }
   }
-  shadow /= (samples * samples * samples);
+  shadow /= float(samples);
 
   return shadow;
 }
