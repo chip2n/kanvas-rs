@@ -6,6 +6,7 @@ mod pipeline;
 mod shader;
 mod shadow;
 mod texture;
+mod ui;
 mod uniform;
 
 use cgmath::prelude::*;
@@ -25,46 +26,49 @@ fn main() {
     let mut state = block_on(State::new(window));
     let mut last_render_time = std::time::Instant::now();
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == state.window.id() => {
-            if !state.input(event) {
-                match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::KeyboardInput { input, .. } => match input {
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        } => *control_flow = ControlFlow::Exit,
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == state.window.id() => {
+                if !state.input(event) {
+                    match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        WindowEvent::KeyboardInput { input, .. } => match input {
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            } => *control_flow = ControlFlow::Exit,
+                            _ => {}
+                        },
+                        WindowEvent::Resized(physical_size) => {
+                            state.resize(*physical_size);
+                        }
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            state.resize(**new_inner_size);
+                        }
                         _ => {}
-                    },
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
-                    }
-                    _ => {}
-                };
+                    };
+                }
             }
+            Event::DeviceEvent { ref event, .. } => {
+                state.handle_device_event(event);
+            }
+            Event::RedrawRequested(_) => {
+                let now = std::time::Instant::now();
+                let dt = now - last_render_time;
+                last_render_time = now;
+                state.update(dt);
+                state.render();
+            }
+            Event::MainEventsCleared => {
+                state.window.request_redraw();
+            }
+            _ => {}
         }
-        Event::DeviceEvent { ref event, .. } => {
-            state.handle_device_event(event);
-        }
-        Event::RedrawRequested(_) => {
-            let now = std::time::Instant::now();
-            let dt = now - last_render_time;
-            last_render_time = now;
-            state.update(dt);
-            state.render();
-        }
-        Event::MainEventsCleared => {
-            state.window.request_redraw();
-        }
-        _ => {}
+        state.debug_ui.handle_event(&state.window, &event);
     });
 }
 
@@ -100,6 +104,7 @@ struct State {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     save_texture: bool,
     debug_pass: debug::DebugPass,
+    debug_ui: ui::DebugUi,
 }
 
 impl State {
@@ -117,7 +122,7 @@ impl State {
             .await
             .unwrap();
 
-        let (device, queue) = adapter
+        let (device, mut queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::empty(),
@@ -421,6 +426,8 @@ impl State {
             &globals_bind_group_layout,
         );
 
+        let debug_ui = ui::DebugUi::new(&window, &device, &mut queue, &sc_desc);
+
         State {
             window,
             surface,
@@ -453,6 +460,7 @@ impl State {
             texture_bind_group_layout,
             save_texture: false,
             debug_pass,
+            debug_ui,
         }
     }
 
@@ -486,6 +494,14 @@ impl State {
                         } else {
                             false
                         }
+                    } else {
+                        false
+                    }
+                }
+                VirtualKeyCode::Z => {
+                    if *state == ElementState::Pressed {
+                        self.debug_ui.is_visible = !self.debug_ui.is_visible;
+                        true
                     } else {
                         false
                     }
@@ -611,6 +627,15 @@ impl State {
             });
 
         self.render_with_encoder(&mut encoder, &frame.output);
+
+        self.debug_ui.render(
+            &frame.output,
+            &self.device,
+            &self.window,
+            &mut encoder,
+            &self.queue,
+        );
+
         self.queue.submit(iter::once(encoder.finish()));
 
         if self.save_texture {
