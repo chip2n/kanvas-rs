@@ -74,12 +74,14 @@ impl DebugPass {
         globals_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let mut verts = PLANE_VERTICES.clone();
+        /*
         for vert in &mut verts {
             let new_pos = cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.75, 0.75, 0.0))
                 * cgmath::Matrix4::from_scale(0.25)
                 * vert.position.extend(1.0);
             vert.position = new_pos.truncate();
         }
+        */
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -162,7 +164,8 @@ impl DebugPass {
                 }),
                 // description on how color are stored and processed throughout the pipeline
                 color_states: &[wgpu::ColorStateDescriptor {
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb, // TODO same as swap chain - refactor
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    //format: wgpu::TextureFormat::Bgra8UnormSrgb,
                     color_blend: wgpu::BlendDescriptor::REPLACE,
                     alpha_blend: wgpu::BlendDescriptor::REPLACE,
                     write_mask: wgpu::ColorWrite::ALL,
@@ -190,13 +193,13 @@ impl DebugPass {
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        frame: &wgpu::SwapChainTexture,
+        output: &wgpu::TextureView,
         globals_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             // where we're going to draw our color to
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
+                attachment: &output,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,

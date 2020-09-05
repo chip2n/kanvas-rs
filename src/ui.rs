@@ -4,6 +4,7 @@ pub struct DebugUi {
     renderer: imgui_wgpu::Renderer,
     platform: imgui_winit_support::WinitPlatform,
     last_cursor: Option<imgui::MouseCursor>,
+    shadow_map_ids: [imgui::TextureId; 6],
 }
 
 impl DebugUi {
@@ -39,9 +40,19 @@ impl DebugUi {
             }]);
 
         // Setup dear imgui wgpu renderer
-        let renderer = imgui_wgpu::Renderer::new(&mut context, &device, queue, sc_desc.format);
+        let mut renderer =
+            imgui_wgpu::Renderer::new(&mut context, &device, queue, sc_desc.format, None, 1);
 
         let last_cursor = None;
+
+        let shadow_map_ids = [
+            create_texture(device, &mut renderer),
+            create_texture(device, &mut renderer),
+            create_texture(device, &mut renderer),
+            create_texture(device, &mut renderer),
+            create_texture(device, &mut renderer),
+            create_texture(device, &mut renderer),
+        ];
 
         DebugUi {
             is_visible: false,
@@ -49,6 +60,7 @@ impl DebugUi {
             renderer,
             platform,
             last_cursor,
+            shadow_map_ids,
         }
     }
 
@@ -60,6 +72,10 @@ impl DebugUi {
     ) {
         self.platform
             .handle_event(self.context.io_mut(), window, event);
+    }
+
+    pub fn get_texture<'a>(&'a self, id: imgui::TextureId) -> Option<&'a imgui_wgpu::Texture> {
+        self.renderer.textures.get(id)
     }
 
     pub fn render(
@@ -77,26 +93,31 @@ impl DebugUi {
         self.platform
             .prepare_frame(self.context.io_mut(), window)
             .expect("Failed to prepare frame");
+
         let ui = self.context.frame();
 
-        {
-            let window = imgui::Window::new(imgui::im_str!("Hello world"));
-            window
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                .build(&ui, || {
-                    ui.text(imgui::im_str!("Hello world!"));
-                    ui.text(imgui::im_str!("This...is...imgui-rs on WGPU!"));
-                    ui.separator();
-                    let mouse_pos = ui.io().mouse_pos;
-                    ui.text(imgui::im_str!(
-                        "Mouse Position: ({:.1},{:.1})",
-                        mouse_pos[0],
-                        mouse_pos[1]
-                    ));
-                });
+        let images: Vec<_> = self
+            .shadow_map_ids
+            .iter()
+            .map(|id| imgui::Image::new(*id, [128.0, 128.0]))
+            .collect();
 
-            let mut open = true;
-            ui.show_demo_window(&mut open);
+        {
+            let window = imgui::Window::new(imgui::im_str!("Shadow Debug"));
+            window
+                .content_size([128.0 * 3.0, 0.0])
+                .resizable(false)
+                .build(&ui, || {
+                    let mut is_enabled = true;
+                    ui.checkbox(imgui::im_str!("Shadows enabled"), &mut is_enabled);
+                    ui.separator();
+                    ui.columns(3, imgui::im_str!("Columnz"), false);
+                    for image in images {
+                        image.build(&ui);
+                        ui.next_column();
+                    }
+                    ui.columns(1, imgui::im_str!("Columnz"), false);
+                });
         }
 
         if self.last_cursor != ui.mouse_cursor() {
@@ -120,4 +141,22 @@ impl DebugUi {
             .render(ui.render(), queue, device, &mut rpass)
             .expect("Rendering failed");
     }
+
+    pub fn shadow_textures<'a>(&'a self) -> impl Iterator<Item = &'a imgui_wgpu::Texture> + 'a {
+        self.shadow_map_ids
+            .iter()
+            .map(move |id| self.get_texture(*id).unwrap())
+    }
+}
+
+fn create_texture(device: &wgpu::Device, renderer: &mut imgui_wgpu::Renderer) -> imgui::TextureId {
+    let imgui_texture = imgui_wgpu::Texture::new(
+        device,
+        &renderer,
+        1024,
+        1024,
+        wgpu::TextureFormat::Rgba8Unorm,
+        None,
+    );
+    renderer.textures.insert(imgui_texture)
 }

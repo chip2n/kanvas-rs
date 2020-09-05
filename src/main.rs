@@ -12,6 +12,7 @@ mod uniform;
 use cgmath::prelude::*;
 use futures::executor::block_on;
 use model::Vertex;
+use std::num::NonZeroU32;
 use std::{iter, mem};
 use wgpu::util::DeviceExt;
 use winit::{
@@ -628,6 +629,11 @@ impl State {
 
         self.render_with_encoder(&mut encoder, &frame.output);
 
+        for tex in self.debug_ui.shadow_textures() {
+            self.debug_pass
+                .render(&mut encoder, &tex.view, &self.globals_bind_group);
+        }
+
         self.debug_ui.render(
             &frame.output,
             &self.device,
@@ -724,8 +730,5 @@ impl State {
                 &self.light_bind_group,
             );
         }
-
-        self.debug_pass
-            .render(encoder, &frame, &self.globals_bind_group);
     }
 }

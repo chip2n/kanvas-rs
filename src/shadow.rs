@@ -13,7 +13,7 @@ use wgpu::util::DeviceExt;
 const MAX_LIGHTS: usize = 1;
 
 const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+pub const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: 1024,
     height: 1024,
     depth: MAX_LIGHTS as u32,
