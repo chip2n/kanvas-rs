@@ -62,15 +62,13 @@ const PLANE_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 pub struct DebugPass {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
 }
 
 impl DebugPass {
     pub fn new(
         device: &wgpu::Device,
-        texture: &wgpu::TextureView,
-        sampler: &wgpu::Sampler,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
         globals_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let mut verts = PLANE_VERTICES.clone();
@@ -96,44 +94,6 @@ impl DebugPass {
 
         // TODO pass this in
         let mut shader_compiler = shaderc::Compiler::new().unwrap();
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::SampledTexture {
-                            multisampled: false,
-                            dimension: wgpu::TextureViewDimension::D2,
-                            component_type: wgpu::TextureComponentType::Float,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler { comparison: false },
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(texture),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-            ],
-            label: None,
-        });
 
         let pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -185,7 +145,6 @@ impl DebugPass {
         DebugPass {
             vertex_buffer,
             index_buffer,
-            bind_group,
             pipeline,
         }
     }
@@ -194,6 +153,7 @@ impl DebugPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
+        texture_bind_group: &wgpu::BindGroup,
         globals_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -213,7 +173,7 @@ impl DebugPass {
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..));
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(0, &texture_bind_group, &[]);
         render_pass.set_bind_group(1, &globals_bind_group, &[]);
         render_pass.draw_indexed(0..PLANE_INDICES.len() as u32, 0, 0..1);
     }

@@ -19,6 +19,13 @@ pub const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     depth: MAX_LIGHTS as u32,
 };
 
+pub struct ShadowMapTarget {
+    pub texture: wgpu::Texture,
+    pub view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
+    pub bind_group: wgpu::BindGroup,
+}
+
 pub struct ShadowPass {
     pub pipeline: wgpu::RenderPipeline,
     pub sampler: wgpu::Sampler,
@@ -26,7 +33,8 @@ pub struct ShadowPass {
     pub uniforms_bind_group: wgpu::BindGroup,
     pub cube_texture: wgpu::Texture,
     pub cube_texture_view: wgpu::TextureView,
-    pub targets: Vec<(wgpu::Texture, wgpu::TextureView)>,
+    pub targets: [ShadowMapTarget; 6],
+    pub target_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl ShadowPass {
@@ -136,34 +144,97 @@ impl ShadowPass {
             array_layer_count: NonZeroU32::new(1),
         });
 
-        let targets: Vec<(wgpu::Texture, wgpu::TextureView)> = (0..6)
-            .map(|_| {
-                let texture = device.create_texture(&wgpu::TextureDescriptor {
-                    size: SHADOW_SIZE,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: SHADOW_FORMAT,
-                    usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
-                        | wgpu::TextureUsage::SAMPLED
-                        | wgpu::TextureUsage::COPY_SRC,
-                    label: None,
-                });
+        let target_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
 
-                let target_view = texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some("Shadow"),
-                    format: None,
-                    dimension: Some(wgpu::TextureViewDimension::D2),
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: NonZeroU32::new(1),
-                });
 
-                (texture, target_view)
-            })
-            .collect();
+        let create_target = || {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                size: SHADOW_SIZE,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: SHADOW_FORMAT,
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
+                    | wgpu::TextureUsage::SAMPLED
+                    | wgpu::TextureUsage::COPY_SRC,
+                label: None,
+            });
+
+            let view = texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("Shadow"),
+                format: None,
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                level_count: None,
+                base_array_layer: 0,
+                array_layer_count: NonZeroU32::new(1),
+            });
+
+            // TODO duplicated from above
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("shadow"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                compare: None,
+                ..Default::default()
+            });
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &target_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+                label: None,
+            });
+
+            ShadowMapTarget {
+                texture,
+                view,
+                sampler,
+                bind_group,
+            }
+        };
+        let targets = [
+            create_target(),
+            create_target(),
+            create_target(),
+            create_target(),
+            create_target(),
+            create_target(),
+        ];
 
         Self {
             pipeline,
@@ -173,14 +244,15 @@ impl ShadowPass {
             cube_texture,
             cube_texture_view,
             targets,
+            target_bind_group_layout,
         }
     }
 
     pub fn copy_to_cubemap(&self, encoder: &mut wgpu::CommandEncoder) {
-        for (i, (texture, texture_view)) in self.targets.iter().enumerate() {
+        for (i, target) in self.targets.iter().enumerate() {
             encoder.copy_texture_to_texture(
                 wgpu::TextureCopyView {
-                    texture: &texture,
+                    texture: &target.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                 },
@@ -211,7 +283,7 @@ impl ShadowPass {
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: &self.targets[face_index].1,
+                attachment: &self.targets[face_index].view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: true,
@@ -223,7 +295,7 @@ impl ShadowPass {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: &self.targets[face_index].1,
+                attachment: &self.targets[face_index].view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,

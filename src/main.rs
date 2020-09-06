@@ -103,7 +103,6 @@ struct State {
     light_bind_group: wgpu::BindGroup,
     shadow_pass: shadow::ShadowPass,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    save_texture: bool,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
 }
@@ -422,8 +421,7 @@ impl State {
 
         let debug_pass = debug::DebugPass::new(
             &device,
-            &shadow_pass.targets[0].1,
-            &shadow_pass.sampler,
+            &shadow_pass.target_bind_group_layout,
             &globals_bind_group_layout,
         );
 
@@ -459,7 +457,6 @@ impl State {
             light_bind_group,
             shadow_pass,
             texture_bind_group_layout,
-            save_texture: false,
             debug_pass,
             debug_ui,
         }
@@ -507,16 +504,6 @@ impl State {
                         false
                     }
                 }
-                /*
-                VirtualKeyCode::S => {
-                    if *state == ElementState::Pressed {
-                        self.save_texture = true;
-                        true
-                    } else {
-                        false
-                    }
-                }
-                */
                 _ => self.camera_controller.process_keyboard(*key, *state),
             },
             WindowEvent::MouseWheel { delta, .. } => {
@@ -629,9 +616,14 @@ impl State {
 
         self.render_with_encoder(&mut encoder, &frame.output);
 
-        for tex in self.debug_ui.shadow_textures() {
-            self.debug_pass
-                .render(&mut encoder, &tex.view, &self.globals_bind_group);
+        for (i, tex) in self.debug_ui.shadow_textures().enumerate() {
+            let shadow_target = &self.shadow_pass.targets[i];
+            self.debug_pass.render(
+                &mut encoder,
+                &tex.view,
+                &shadow_target.bind_group,
+                &self.globals_bind_group,
+            );
         }
 
         self.debug_ui.render(
@@ -643,11 +635,6 @@ impl State {
         );
 
         self.queue.submit(iter::once(encoder.finish()));
-
-        if self.save_texture {
-            debug::save_texture(&self.device, 1024, 1024, &self.shadow_pass.targets[0].0);
-            self.save_texture = false;
-        }
     }
 
     fn render_with_encoder(
