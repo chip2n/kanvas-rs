@@ -4,7 +4,7 @@ use crate::model;
 use crate::pipeline;
 use crate::{compile_frag, compile_vertex};
 use std::mem;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Range;
 use wgpu::util::DeviceExt;
 
@@ -45,6 +45,7 @@ impl ShadowPass {
     ) -> Self {
         // Make room for all 6 sides of cubemap
         let uniforms_size = (6 * wgpu::BIND_BUFFER_ALIGNMENT) as wgpu::BufferAddress;
+        let uniforms_binding_size = NonZeroU64::new(mem::size_of::<ShadowUniforms>() as u64);
         let uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shadow uniforms"),
             size: uniforms_size,
@@ -58,8 +59,7 @@ impl ShadowPass {
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer {
                         dynamic: true,
-                        // TODO use correct value for performance
-                        min_binding_size: None,
+                        min_binding_size: uniforms_binding_size,
                     },
                     count: None,
                 }],
@@ -73,7 +73,7 @@ impl ShadowPass {
                 resource: wgpu::BindingResource::Buffer {
                     buffer: &uniforms_buffer,
                     offset: 0,
-                    size: core::num::NonZeroU64::new(std::mem::size_of::<ShadowUniforms>() as u64),
+                    size: uniforms_binding_size,
                 },
             }],
             label: Some("Shadow uniforms bind group"),
@@ -159,7 +159,6 @@ impl ShadowPass {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
 
         let create_target = || {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
