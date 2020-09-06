@@ -80,7 +80,6 @@ impl ShadowPass {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            // TODO we don't need all these
             label: Some("Shadow pipeline"),
             push_constant_ranges: &[],
             bind_group_layouts: &[&uniforms_bind_group_layout, &instances_bind_group_layout],
