@@ -2,6 +2,7 @@ use crate::camera;
 use crate::light;
 use crate::model;
 use crate::pipeline;
+use crate::texture;
 use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
 use model::Vertex;
@@ -17,6 +18,7 @@ pub struct ForwardPass {
     pub uniform_buffer: wgpu::Buffer,
     pub uniform_bind_group: wgpu::BindGroup,
 
+    pub depth_texture: texture::Texture,
     pub pipeline: wgpu::RenderPipeline,
 }
 
@@ -158,6 +160,12 @@ impl ForwardPass {
             label: Some("uniform_bind_group"),
         });
 
+        let depth_texture = texture::Texture::create_depth_texture(
+            &kanvas.device,
+            &kanvas.sc_desc,
+            "depth_texture",
+        );
+
         let pipeline = {
             let layout = kanvas
                 .device
@@ -200,6 +208,7 @@ impl ForwardPass {
             uniform_buffer,
             uniform_bind_group,
 
+            depth_texture,
             pipeline,
         }
     }
@@ -218,6 +227,45 @@ impl ForwardPass {
             0,
             std::mem::size_of::<Uniforms>() as wgpu::BufferAddress,
         );
+    }
+
+    pub fn resize(&mut self, device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) {
+        self.depth_texture =
+            texture::Texture::create_depth_texture(device, sc_desc, "depth_texture");
+    }
+
+    pub fn begin<'a>(
+        &'a self,
+        output: &'a wgpu::TextureView,
+        encoder: &'a mut wgpu::CommandEncoder,
+    ) -> wgpu::RenderPass {
+        let back_color = wgpu::Color {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 1.0,
+        };
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            // where we're going to draw our color to
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: output,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(back_color),
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
+
+        render_pass
     }
 }
 

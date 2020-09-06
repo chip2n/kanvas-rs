@@ -164,7 +164,6 @@ struct State {
     forward_pass: forward::ForwardPass,
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
-    depth_texture: texture::Texture,
     obj_model: model::Model,
     light_model: model::Model,
     light: light::Light,
@@ -299,12 +298,6 @@ impl State {
             )
         };
 
-        let depth_texture = texture::Texture::create_depth_texture(
-            &kanvas.device,
-            &kanvas.sc_desc,
-            "depth_texture",
-        );
-
         let (obj_model, cmds) = model::Model::load(
             &kanvas.device,
             &forward_pass.texture_bind_group_layout,
@@ -339,7 +332,6 @@ impl State {
             forward_pass,
             instances_bind_group,
             instances,
-            depth_texture,
             obj_model,
             light_model,
             light,
@@ -353,12 +345,7 @@ impl State {
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.kanvas.resize(new_size);
-        self.depth_texture = texture::Texture::create_depth_texture(
-            &self.kanvas.device,
-            &self.kanvas.sc_desc,
-            "depth_texture",
-        );
-
+        self.forward_pass.resize(&self.kanvas.device, &self.kanvas.sc_desc);
         self.projection.resize(new_size.width, new_size.height);
     }
 
@@ -536,26 +523,7 @@ impl State {
 
         {
             // forward pass
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // where we're going to draw our color to
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(back_color),
-                        store: true,
-                    },
-                }],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    attachment: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-
+            let mut render_pass = self.forward_pass.begin(&frame.view, encoder);
             render_pass.set_pipeline(&self.forward_pass.pipeline);
 
             render_pass.draw_model_instanced(
