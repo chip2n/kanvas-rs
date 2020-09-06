@@ -12,7 +12,6 @@ mod uniform;
 use cgmath::prelude::*;
 use futures::executor::block_on;
 use model::Vertex;
-use std::num::NonZeroU32;
 use std::{iter, mem};
 use wgpu::util::DeviceExt;
 use winit::{
@@ -89,20 +88,15 @@ struct State {
     uniforms: uniform::Uniforms,
     uniform_buffer: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
-    instances_bind_group_layout: wgpu::BindGroupLayout,
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
-    instance_buffer: wgpu::Buffer,
-    plane_instances_bind_group: wgpu::BindGroup,
     depth_texture: texture::Texture,
     obj_model: model::Model,
-    plane_model: model::Model,
     light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     shadow_pass: shadow::ShadowPass,
-    texture_bind_group_layout: wgpu::BindGroupLayout,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
 }
@@ -238,42 +232,6 @@ impl State {
                 },
             }],
             label: Some("instances_bind_group"),
-        });
-
-        let plane_instances = vec![model::Instance {
-            position: cgmath::Vector3 {
-                x: 0.0,
-                y: 5.0,
-                z: -3.0,
-            },
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(180.0),
-            ) * cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_x(),
-                cgmath::Deg(90.0),
-            ),
-        }];
-        let plane_instance_data = plane_instances
-            .iter()
-            .map(model::Instance::to_raw)
-            .collect::<Vec<_>>();
-        let plane_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Plane instances"),
-            contents: bytemuck::cast_slice(&plane_instance_data),
-            usage: wgpu::BufferUsage::STORAGE,
-        });
-        let plane_instances_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &instances_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &plane_instance_buffer,
-                    offset: 0,
-                    size: None,
-                },
-            }],
-            label: Some("plane_instances_bind_group"),
         });
 
         let light = light::Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
@@ -414,11 +372,6 @@ impl State {
             model::Model::load(&device, &texture_bind_group_layout, "res/models/cube.obj").unwrap();
         queue.submit(cmds);
 
-        let (plane_model, cmds) =
-            model::Model::load(&device, &texture_bind_group_layout, "res/models/plane.obj")
-                .unwrap();
-        queue.submit(cmds);
-
         let debug_pass = debug::DebugPass::new(
             &device,
             &shadow_pass.target_bind_group_layout,
@@ -443,20 +396,15 @@ impl State {
             uniforms,
             uniform_buffer,
             globals_bind_group,
-            instances_bind_group_layout,
             instances_bind_group,
             instances,
-            instance_buffer,
-            plane_instances_bind_group,
             depth_texture,
             obj_model,
-            plane_model,
             light_model,
             light,
             light_buffer,
             light_bind_group,
             shadow_pass,
-            texture_bind_group_layout,
             debug_pass,
             debug_ui,
         }
