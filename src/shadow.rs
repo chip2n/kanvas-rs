@@ -6,7 +6,6 @@ use crate::{compile_frag, compile_vertex};
 use std::mem;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Range;
-use wgpu::util::DeviceExt;
 
 // TODO support moar lights
 //const MAX_LIGHTS: usize = 10;
@@ -464,13 +463,3 @@ pub struct ShadowUniforms {
 
 unsafe impl bytemuck::Pod for ShadowUniforms {}
 unsafe impl bytemuck::Zeroable for ShadowUniforms {}
-
-impl ShadowUniforms {
-    pub fn new() -> Self {
-        let light = light::Light::new((5.0, 10.0, 20.0), (1.0, 1.0, 1.0));
-        Self {
-            light_proj: create_light_proj(&light),
-            light_position: light.position,
-        }
-    }
-}

@@ -71,15 +71,7 @@ impl DebugPass {
         texture_bind_group_layout: &wgpu::BindGroupLayout,
         globals_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let mut verts = PLANE_VERTICES.clone();
-        /*
-        for vert in &mut verts {
-            let new_pos = cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.75, 0.75, 0.0))
-                * cgmath::Matrix4::from_scale(0.25)
-                * vert.position.extend(1.0);
-            vert.position = new_pos.truncate();
-        }
-        */
+        let verts = PLANE_VERTICES.clone();
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -177,73 +169,4 @@ impl DebugPass {
         render_pass.set_bind_group(1, &globals_bind_group, &[]);
         render_pass.draw_indexed(0..PLANE_INDICES.len() as u32, 0, 0..1);
     }
-}
-
-pub fn save_texture(device: &wgpu::Device, width: u32, height: u32, texture: &wgpu::Texture) {
-    const U32_SIZE: u32 = std::mem::size_of::<u32>() as u32;
-    let buffer_size = (U32_SIZE * width * height) as wgpu::BufferAddress;
-    let buffer_desc = wgpu::BufferDescriptor {
-        size: buffer_size,
-        usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
-        label: Some("screenshot_buffer"),
-        mapped_at_creation: false,
-    };
-
-    let buffer = device.create_buffer(&buffer_desc);
-
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-    encoder.copy_texture_to_buffer(
-        wgpu::TextureCopyView {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-        },
-        wgpu::BufferCopyView {
-            buffer: &buffer,
-            layout: wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: U32_SIZE * width,
-                rows_per_image: height,
-            },
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth: 1,
-        },
-    );
-
-    let near = 0.1;
-    let far = 100.0;
-    std::thread::spawn(move || {
-        use futures::executor::block_on;
-
-        let slice = buffer.slice(..);
-        block_on(slice.map_async(wgpu::MapMode::Read)).unwrap();
-        let data: &[u8] = &slice.get_mapped_range();
-        let pixels: &[f32] = bytemuck::try_cast_slice(data).unwrap();
-
-        use image::{ImageBuffer, Pixel, Rgba};
-        let mut buffer = ImageBuffer::<Rgba<u8>, _>::new(width, height);
-
-        let mut x = 0;
-        let mut y = 0;
-        for pixel in pixels {
-            let z = pixel * 2.0 - 1.0;
-            let r = (2.0 * near * far) / (far + near - z * (far - near));
-            let p = (r.floor() * 255.0 / far) as u8;
-
-            buffer.put_pixel(x, y, Pixel::from_channels(p, p, p, 255));
-
-            x += 1;
-            if x >= width {
-                x = 0;
-                y += 1;
-            }
-        }
-
-        buffer.save("image.png").unwrap();
-    });
 }
