@@ -22,7 +22,6 @@ pub const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
 pub struct ShadowMapTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -192,19 +191,6 @@ impl ShadowPass {
                 array_layer_count: NonZeroU32::new(1),
             });
 
-            // TODO duplicated from above
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("shadow"),
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                compare: None,
-                ..Default::default()
-            });
-
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &target_bind_group_layout,
                 entries: &[
@@ -223,7 +209,6 @@ impl ShadowPass {
             ShadowMapTarget {
                 texture,
                 view,
-                sampler,
                 bind_group,
             }
         };
@@ -496,32 +481,4 @@ impl ShadowUniforms {
             light_position: light.position,
         }
     }
-}
-
-struct DynamicLight {
-    proj: cgmath::Matrix4<f32>,
-    position: cgmath::Vector3<f32>,
-    _padding: u32, // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
-    color: cgmath::Vector3<f32>,
-}
-
-fn test(
-    device: &wgpu::Device,
-    encoder: &mut wgpu::CommandEncoder,
-    uniforms_buffer: wgpu::Buffer,
-    uniforms: ShadowUniforms,
-) {
-    let staging_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Staging"),
-        contents: bytemuck::cast_slice(&[uniforms]),
-        usage: wgpu::BufferUsage::COPY_SRC,
-    });
-
-    encoder.copy_buffer_to_buffer(
-        &staging_buffer,
-        0,
-        &uniforms_buffer,
-        0,
-        std::mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress,
-    );
 }
