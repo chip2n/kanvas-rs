@@ -46,16 +46,11 @@ impl ShadowPass {
         // Make room for all 6 sides of cubemap
         let uniforms_size = (6 * wgpu::BIND_BUFFER_ALIGNMENT) as wgpu::BufferAddress;
         let uniforms = ShadowUniforms::new();
-        let uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shadow uniforms"),
-            // TODO Skip filling buffer on initialization
-            contents: bytemuck::cast_slice(
-                &[
-                //uniforms, uniforms, uniforms, uniforms, uniforms, uniforms,
-                0; 256 * 6
-            ],
-            ),
+            size: 256 * 6,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            mapped_at_creation: false,
         });
         let uniforms_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
