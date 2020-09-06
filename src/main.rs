@@ -23,7 +23,10 @@ use winit::{
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut state = block_on(State::new(window));
+
+    let kanvas = block_on(Kanvas::new(window));
+    let mut state = State::new(kanvas);
+
     let mut last_render_time = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
@@ -31,7 +34,7 @@ fn main() {
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == state.window.id() => {
+            } if window_id == state.kanvas.window.id() => {
                 if !state.input(event) {
                     match event {
                         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -64,45 +67,26 @@ fn main() {
                 state.render();
             }
             Event::MainEventsCleared => {
-                state.window.request_redraw();
+                state.kanvas.window.request_redraw();
             }
             _ => {}
         }
-        state.debug_ui.handle_event(&state.window, &event);
+        state.debug_ui.handle_event(&state.kanvas.window, &event);
     });
 }
 
-struct State {
-    window: Window,
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    sc_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
-    render_pipeline: wgpu::RenderPipeline,
-    light_render_pipeline: wgpu::RenderPipeline,
-    size: winit::dpi::PhysicalSize<u32>,
-    camera: camera::Camera,
-    projection: camera::PerspectiveProjection,
-    camera_controller: camera::CameraController,
-    uniforms: uniform::Uniforms,
-    uniform_buffer: wgpu::Buffer,
-    globals_bind_group: wgpu::BindGroup,
-    instances_bind_group: wgpu::BindGroup,
-    instances: Vec<model::Instance>,
-    depth_texture: texture::Texture,
-    obj_model: model::Model,
-    light_model: model::Model,
-    light: light::Light,
-    light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
-    shadow_pass: shadow::ShadowPass,
-    debug_pass: debug::DebugPass,
-    debug_ui: ui::DebugUi,
+pub struct Kanvas {
+    pub window: Window,
+    pub surface: wgpu::Surface,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub sc_desc: wgpu::SwapChainDescriptor,
+    pub swap_chain: wgpu::SwapChain,
+    pub size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl State {
-    async fn new(window: Window) -> State {
+impl Kanvas {
+    async fn new(window: Window) -> Self {
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
 
         let size = window.inner_size();
@@ -116,7 +100,7 @@ impl State {
             .await
             .unwrap();
 
-        let (device, mut queue) = adapter
+        let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::empty(),
@@ -137,14 +121,69 @@ impl State {
         };
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
+        Kanvas {
+            window,
+            surface,
+            device,
+            queue,
+            sc_desc,
+            swap_chain,
+            size, // TODO needed?
+        }
+    }
+
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.size = new_size;
+        self.sc_desc.width = new_size.width;
+        self.sc_desc.height = new_size.height;
+        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+    }
+
+    pub fn create_encoder(&self) -> wgpu::CommandEncoder {
+        self.device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+    }
+
+    pub fn frame(&mut self) -> wgpu::SwapChainFrame {
+        self.swap_chain
+            .get_current_frame()
+            .expect("Timeout getting texture")
+    }
+}
+
+struct State {
+    kanvas: Kanvas,
+    render_pipeline: wgpu::RenderPipeline,
+    light_render_pipeline: wgpu::RenderPipeline,
+    camera: camera::Camera,
+    projection: camera::PerspectiveProjection,
+    camera_controller: camera::CameraController,
+    uniforms: uniform::Uniforms,
+    uniform_buffer: wgpu::Buffer,
+    globals_bind_group: wgpu::BindGroup,
+    instances_bind_group: wgpu::BindGroup,
+    instances: Vec<model::Instance>,
+    depth_texture: texture::Texture,
+    obj_model: model::Model,
+    light_model: model::Model,
+    light: light::Light,
+    light_buffer: wgpu::Buffer,
+    light_bind_group: wgpu::BindGroup,
+    shadow_pass: shadow::ShadowPass,
+    debug_pass: debug::DebugPass,
+    debug_ui: ui::DebugUi,
+}
+
+impl State {
+    fn new(kanvas: Kanvas) -> State {
         // A BindGroup describes a set of resources and how they can be accessed by a shader.
         // We create a BindGroup using a BindGroupLayout.
-        let texture_bind_group_layout = texture::create_bind_group_layout(&device);
+        let texture_bind_group_layout = texture::create_bind_group_layout(&kanvas.device);
 
         let camera = camera::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection = camera::PerspectiveProjection::new(
-            sc_desc.width,
-            sc_desc.height,
+            kanvas.sc_desc.width,
+            kanvas.sc_desc.height,
             cgmath::Deg(45.0),
             0.1,
             100.0,
@@ -153,26 +192,28 @@ impl State {
 
         let mut uniforms = uniform::Uniforms::new();
         uniforms.update_view_proj(&camera, &projection);
-        let uniform_buffer = uniform::create_buffer(&device, &[uniforms]);
+        let uniform_buffer = uniform::create_buffer(&kanvas.device, &[uniforms]);
 
         // TODO move to uniform.rs?
         let globals_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                        min_binding_size: wgpu::BufferSize::new(
-                            mem::size_of::<uniform::Uniforms>() as _,
-                        ),
-                    },
-                    count: None,
-                }],
-                label: Some("globals_bind_group_layout"),
-            });
+            kanvas
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                mem::size_of::<uniform::Uniforms>() as _,
+                            ),
+                        },
+                        count: None,
+                    }],
+                    label: Some("globals_bind_group_layout"),
+                });
 
-        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let globals_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &globals_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -200,28 +241,32 @@ impl State {
             .iter()
             .map(model::Instance::to_raw)
             .collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instances"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsage::STORAGE,
-        });
-
-        let instances_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::StorageBuffer {
-                        dynamic: false,
-                        min_binding_size: None,
-                        readonly: true,
-                    },
-                    count: None,
-                }],
-                label: Some("instances_bind_group_layout"),
+        let instance_buffer = kanvas
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instances"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsage::STORAGE,
             });
 
-        let instances_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let instances_bind_group_layout =
+            kanvas
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            min_binding_size: None,
+                            readonly: true,
+                        },
+                        count: None,
+                    }],
+                    label: Some("instances_bind_group_layout"),
+                });
+
+        let instances_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &instances_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -237,85 +282,95 @@ impl State {
         let light = light::Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
 
         // We'll want to update our lights position, so we use COPY_DST
-        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Lights"),
-            contents: bytemuck::cast_slice(&[light.to_raw()]),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-        });
+        let light_buffer = kanvas
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Lights"),
+                contents: bytemuck::cast_slice(&[light.to_raw()]),
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            });
 
         let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::UniformBuffer {
-                            dynamic: false,
-                            min_binding_size: wgpu::BufferSize::new(
-                                mem::size_of::<light::LightRaw>() as _,
-                            ),
+            kanvas
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                                min_binding_size: wgpu::BufferSize::new(mem::size_of::<
+                                    light::LightRaw,
+                                >(
+                                )
+                                    as _),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::SampledTexture {
-                            multisampled: false,
-                            component_type: wgpu::TextureComponentType::Float,
-                            dimension: wgpu::TextureViewDimension::D2,
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::SampledTexture {
+                                multisampled: false,
+                                component_type: wgpu::TextureComponentType::Float,
+                                dimension: wgpu::TextureViewDimension::D2,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler { comparison: false },
-                        count: None,
-                    },
-                ],
-                label: None,
-            });
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler { comparison: false },
+                            count: None,
+                        },
+                    ],
+                    label: None,
+                });
 
         let mut shader_compiler = shaderc::Compiler::new().unwrap();
         let vertex_descs = [model::ModelVertex::desc()];
 
         let render_pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render pipeline"),
-                push_constant_ranges: &[],
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &globals_bind_group_layout,
-                    &instances_bind_group_layout,
-                    &light_bind_group_layout,
-                ],
-            });
+            let layout = kanvas
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Render pipeline"),
+                    push_constant_ranges: &[],
+                    bind_group_layouts: &[
+                        &texture_bind_group_layout,
+                        &globals_bind_group_layout,
+                        &instances_bind_group_layout,
+                        &light_bind_group_layout,
+                    ],
+                });
 
-            let vs_module = compile_vertex!(&device, &mut shader_compiler, "shader.vert").unwrap();
-            let fs_module = compile_frag!(&device, &mut shader_compiler, "shader.frag").unwrap();
+            let vs_module =
+                compile_vertex!(&kanvas.device, &mut shader_compiler, "shader.vert").unwrap();
+            let fs_module =
+                compile_frag!(&kanvas.device, &mut shader_compiler, "shader.frag").unwrap();
 
             pipeline::create(
                 &"forward",
-                &device,
+                &kanvas.device,
                 &layout,
                 &vs_module,
                 &fs_module,
-                Some(sc_desc.format),
+                Some(kanvas.sc_desc.format),
                 Some(pipeline::DepthConfig::no_bias()),
                 &vertex_descs,
             )
         };
 
         let shadow_pass = shadow::ShadowPass::new(
-            &device,
+            &kanvas.device,
             &mut shader_compiler,
             &instances_bind_group_layout,
             &vertex_descs,
         );
 
         // TODO do some of this in shadow pass?
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let light_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &light_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -339,57 +394,65 @@ impl State {
         });
 
         let light_render_pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Light render pipeline"),
-                push_constant_ranges: &[],
-                bind_group_layouts: &[&globals_bind_group_layout, &light_bind_group_layout],
-            });
+            let layout = kanvas
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Light render pipeline"),
+                    push_constant_ranges: &[],
+                    bind_group_layouts: &[&globals_bind_group_layout, &light_bind_group_layout],
+                });
 
-            let vs_module = compile_vertex!(&device, &mut shader_compiler, "light.vert").unwrap();
-            let fs_module = compile_frag!(&device, &mut shader_compiler, "light.frag").unwrap();
+            let vs_module =
+                compile_vertex!(&kanvas.device, &mut shader_compiler, "light.vert").unwrap();
+            let fs_module =
+                compile_frag!(&kanvas.device, &mut shader_compiler, "light.frag").unwrap();
 
             pipeline::create(
                 &"light",
-                &device,
+                &kanvas.device,
                 &layout,
                 &vs_module,
                 &fs_module,
-                Some(sc_desc.format),
+                Some(kanvas.sc_desc.format),
                 Some(pipeline::DepthConfig::no_bias()),
                 &vertex_descs,
             )
         };
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
+        let depth_texture = texture::Texture::create_depth_texture(
+            &kanvas.device,
+            &kanvas.sc_desc,
+            "depth_texture",
+        );
 
-        let (obj_model, cmds) =
-            model::Model::load(&device, &texture_bind_group_layout, "res/models/scene.obj")
-                .unwrap();
-        queue.submit(cmds);
+        let (obj_model, cmds) = model::Model::load(
+            &kanvas.device,
+            &texture_bind_group_layout,
+            "res/models/scene.obj",
+        )
+        .unwrap();
+        kanvas.queue.submit(cmds);
 
-        let (light_model, cmds) =
-            model::Model::load(&device, &texture_bind_group_layout, "res/models/cube.obj").unwrap();
-        queue.submit(cmds);
+        let (light_model, cmds) = model::Model::load(
+            &kanvas.device,
+            &texture_bind_group_layout,
+            "res/models/cube.obj",
+        )
+        .unwrap();
+        kanvas.queue.submit(cmds);
 
         let debug_pass = debug::DebugPass::new(
-            &device,
+            &kanvas.device,
             &shadow_pass.target_bind_group_layout,
             &globals_bind_group_layout,
         );
 
-        let debug_ui = ui::DebugUi::new(&window, &device, &mut queue, &sc_desc);
+        let debug_ui = ui::DebugUi::new(&kanvas);
 
         State {
-            window,
-            surface,
-            device,
-            queue,
-            sc_desc,
-            swap_chain,
+            kanvas,
             render_pipeline,
             light_render_pipeline,
-            size,
             camera,
             projection,
             camera_controller,
@@ -411,12 +474,12 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.size = new_size;
-        self.sc_desc.width = new_size.width;
-        self.sc_desc.height = new_size.height;
-        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
-        self.depth_texture =
-            texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
+        self.kanvas.resize(new_size);
+        self.depth_texture = texture::Texture::create_depth_texture(
+            &self.kanvas.device,
+            &self.kanvas.sc_desc,
+            "depth_texture",
+        );
 
         self.projection.resize(new_size.width, new_size.height);
     }
@@ -471,14 +534,14 @@ impl State {
 
     fn grab_camera(&mut self) {
         self.camera_controller.is_active = true;
-        self.window.set_cursor_visible(false);
-        self.window.set_cursor_grab(true).unwrap();
+        self.kanvas.window.set_cursor_visible(false);
+        self.kanvas.window.set_cursor_grab(true).unwrap();
     }
 
     fn ungrab_camera(&mut self) {
         self.camera_controller.is_active = false;
-        self.window.set_cursor_visible(true);
-        self.window.set_cursor_grab(false).unwrap();
+        self.kanvas.window.set_cursor_visible(true);
+        self.kanvas.window.set_cursor_grab(false).unwrap();
     }
 
     fn handle_device_event(&mut self, event: &DeviceEvent) -> bool {
@@ -497,21 +560,16 @@ impl State {
         self.uniforms
             .update_view_proj(&self.camera, &self.projection);
 
-        // Copy operations are performed on the gpu, so we'll need
-        // a CommandEncoder for that
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("update encoder"),
-            });
+        let mut encoder = self.kanvas.create_encoder();
 
-        let staging_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Staging"),
-                contents: bytemuck::cast_slice(&[self.uniforms]),
-                usage: wgpu::BufferUsage::COPY_SRC,
-            });
+        let staging_buffer =
+            self.kanvas
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Staging"),
+                    contents: bytemuck::cast_slice(&[self.uniforms]),
+                    usage: wgpu::BufferUsage::COPY_SRC,
+                });
 
         encoder.copy_buffer_to_buffer(
             &staging_buffer,
@@ -527,13 +585,14 @@ impl State {
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * old_position;
-        let staging_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Staging"),
-                contents: bytemuck::cast_slice(&[self.light.to_raw()]),
-                usage: wgpu::BufferUsage::COPY_SRC,
-            });
+        let staging_buffer =
+            self.kanvas
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Staging"),
+                    contents: bytemuck::cast_slice(&[self.light.to_raw()]),
+                    usage: wgpu::BufferUsage::COPY_SRC,
+                });
         encoder.copy_buffer_to_buffer(
             &staging_buffer,
             0,
@@ -542,25 +601,17 @@ impl State {
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
 
-        self.shadow_pass.update_light(&self.queue, &self.light);
+        self.shadow_pass
+            .update_light(&self.kanvas.queue, &self.light);
 
         // We need to remember to submit our CommandEncoder's output
         // otherwise we won't see any change.
-        self.queue.submit(iter::once(encoder.finish()));
+        self.kanvas.queue.submit(iter::once(encoder.finish()));
     }
 
     fn render(&mut self) {
-        // Get a frame to render to
-        let frame = self
-            .swap_chain
-            .get_current_frame()
-            .expect("Timeout getting texture");
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let frame = self.kanvas.frame();
+        let mut encoder = self.kanvas.create_encoder();
 
         self.render_with_encoder(&mut encoder, &frame.output);
 
@@ -575,14 +626,12 @@ impl State {
         }
 
         self.debug_ui.render(
+            &self.kanvas,
             &frame.output,
-            &self.device,
-            &self.window,
             &mut encoder,
-            &self.queue,
         );
 
-        self.queue.submit(iter::once(encoder.finish()));
+        self.kanvas.queue.submit(iter::once(encoder.finish()));
     }
 
     fn render_with_encoder(
