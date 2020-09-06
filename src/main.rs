@@ -82,7 +82,6 @@ pub struct Kanvas {
     pub queue: wgpu::Queue,
     pub sc_desc: wgpu::SwapChainDescriptor,
     pub swap_chain: wgpu::SwapChain,
-    pub size: winit::dpi::PhysicalSize<u32>,
     pub shader_compiler: shaderc::Compiler,
 }
 
@@ -131,13 +130,11 @@ impl Kanvas {
             queue,
             sc_desc,
             swap_chain,
-            size, // TODO needed?
             shader_compiler,
         }
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.size = new_size;
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
