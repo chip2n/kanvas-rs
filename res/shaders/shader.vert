@@ -10,8 +10,7 @@ layout(location=0) out vec3 v_position;       // tangent space
 layout(location=1) out vec3 v_light_position; // tangent space
 layout(location=2) out vec3 v_view_position;  // tangent space
 layout(location=3) out vec2 v_tex_coords;
-layout(location=4) out vec4 v_position_light_space;
-layout(location=5) out vec3 v_position_world_space;
+layout(location=4) out vec3 v_position_world_space;
 
 layout(set=1, binding=0) uniform Globals {
   vec3 u_view_position; // world space
@@ -51,7 +50,6 @@ void main() {
   v_light_position = tangent_matrix * light_position;
   v_view_position = tangent_matrix * u_view_position;
   v_tex_coords = a_tex_coords;
-  v_position_light_space = u_light_proj * vec4(world_position.xyz, 1.0); // TODO not needed
   v_position_world_space = vec3(world_position);
 
   gl_Position = u_view_proj * world_position;

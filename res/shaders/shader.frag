@@ -7,8 +7,7 @@ layout(location=0) in vec3 v_position;       // tangent space
 layout(location=1) in vec3 v_light_position; // tangent space
 layout(location=2) in vec3 v_view_position;  // tangent space
 layout(location=3) in vec2 v_tex_coords;
-layout(location=4) in vec4 v_position_light_space;
-layout(location=5) in vec3 v_position_world_space;
+layout(location=4) in vec3 v_position_world_space;
 
 layout(location=0) out vec4 f_color;
 
