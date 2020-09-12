@@ -1,5 +1,4 @@
 use crate::model;
-use crate::shadow;
 use std::ops::Range;
 use wgpu::util::DeviceExt;
 
@@ -23,7 +22,6 @@ impl Light {
 
     pub fn to_raw(&self) -> LightRaw {
         LightRaw {
-            proj: shadow::create_light_proj(self),
             position: self.position,
             _padding: 0,
             color: self.color,
@@ -34,7 +32,6 @@ impl Light {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LightRaw {
-    pub proj: cgmath::Matrix4<f32>,
     pub position: cgmath::Vector3<f32>,
     // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
     _padding: u32,

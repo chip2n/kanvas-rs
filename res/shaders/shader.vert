@@ -22,7 +22,6 @@ layout(set=2, binding=0) buffer Instances {
 };
 
 layout(set=3, binding=0) uniform Light {
-  mat4 u_light_proj;
   vec3 light_position; // world space
   vec3 light_color;
 };
