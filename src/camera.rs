@@ -126,7 +126,7 @@ impl CameraController {
             amount_down: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
-            is_active: false,
+            is_active: true,
             scroll: 0.0,
             speed,
             sensitivity,

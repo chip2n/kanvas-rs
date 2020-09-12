@@ -3,7 +3,7 @@ use crate::Kanvas;
 pub struct DebugUi {
     pub is_visible: bool,
     pub shadows_enabled: bool,
-    context: imgui::Context,
+    pub context: imgui::Context,
     renderer: imgui_wgpu::Renderer,
     platform: imgui_winit_support::WinitPlatform,
     last_cursor: Option<imgui::MouseCursor>,

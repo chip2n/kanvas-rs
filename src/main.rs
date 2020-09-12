@@ -366,21 +366,15 @@ impl State {
                     },
                 ..
             } => match key {
-                VirtualKeyCode::Escape => {
-                    if *state == ElementState::Pressed {
-                        if self.camera_controller.is_active {
-                            self.ungrab_camera();
-                            true
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                }
                 VirtualKeyCode::Z => {
                     if *state == ElementState::Pressed {
-                        self.debug_ui.is_visible = !self.debug_ui.is_visible;
+                        if !self.camera_controller.is_active {
+                            self.grab_camera();
+                            self.debug_ui.is_visible = false;
+                        } else {
+                            self.ungrab_camera();
+                            self.debug_ui.is_visible = true;
+                        }
                         true
                     } else {
                         false
@@ -396,7 +390,9 @@ impl State {
                 button: MouseButton::Left,
                 ..
             } => {
-                self.grab_camera();
+                if !self.debug_ui.context.io().want_capture_mouse {
+                    self.grab_camera();
+                }
                 true
             }
             _ => false,
