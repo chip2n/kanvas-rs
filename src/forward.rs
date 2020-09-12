@@ -99,6 +99,15 @@ impl ForwardPass {
                             ty: wgpu::BindingType::Sampler { comparison: false },
                             count: None,
                         },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                                min_binding_size: light::LightConfig::binding_size(),
+                            },
+                            count: None,
+                        },
                     ],
                     label: None,
                 });

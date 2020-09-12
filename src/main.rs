@@ -166,6 +166,7 @@ struct State {
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
+    light_config: light::LightConfig,
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
@@ -242,6 +243,8 @@ impl State {
             &vertex_descs,
         );
 
+        let light_config = light::LightConfig::new(&kanvas.device);
+
         // TODO do some of this in shadow pass?
         let light_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &forward_pass.light_bind_group_layout,
@@ -261,6 +264,10 @@ impl State {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&shadow_pass.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: light_config.binding_resource(),
                 },
             ],
             label: None,
@@ -334,6 +341,7 @@ impl State {
             light,
             light_buffer,
             light_bind_group,
+            light_config,
             shadow_pass,
             debug_pass,
             debug_ui,
@@ -342,7 +350,8 @@ impl State {
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.kanvas.resize(new_size);
-        self.forward_pass.resize(&self.kanvas.device, &self.kanvas.sc_desc);
+        self.forward_pass
+            .resize(&self.kanvas.device, &self.kanvas.sc_desc);
         self.projection.resize(new_size.width, new_size.height);
     }
 
@@ -450,6 +459,10 @@ impl State {
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
 
+        // Update light config
+        self.light_config.shadows_enabled = self.debug_ui.shadows_enabled;
+        self.light_config.upload(&self.kanvas.queue);
+
         self.shadow_pass
             .update_light(&self.kanvas.queue, &self.light);
 
@@ -506,17 +519,19 @@ impl State {
             depth_stencil_attachment: None,
         });
 
-        for face_index in 0..6 {
-            // shadow pass
-            let mut pass = self.shadow_pass.begin(encoder, face_index);
-            for mesh in &self.obj_model.meshes {
-                pass.render(
-                    shadow::ShadowPassRenderData::from_mesh(&mesh, &self.instances_bind_group),
-                    face_index,
-                );
+        if self.light_config.shadows_enabled {
+            for face_index in 0..6 {
+                // shadow pass
+                let mut pass = self.shadow_pass.begin(encoder, face_index);
+                for mesh in &self.obj_model.meshes {
+                    pass.render(
+                        shadow::ShadowPassRenderData::from_mesh(&mesh, &self.instances_bind_group),
+                        face_index,
+                    );
+                }
             }
+            self.shadow_pass.copy_to_cubemap(encoder);
         }
-        self.shadow_pass.copy_to_cubemap(encoder);
 
         {
             // forward pass

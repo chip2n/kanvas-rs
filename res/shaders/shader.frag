@@ -23,6 +23,9 @@ layout(set = 3, binding = 0) uniform Light {
 };
 layout(set = 3, binding = 1) uniform textureCube shadow_tex;
 layout(set = 3, binding = 2) uniform sampler shadow_map;
+layout(set = 3, binding = 3) uniform LightConfig {
+  bool shadows_enabled;
+};
 
 //float z_near = 0.1;
 float z_near = 0.1;
@@ -37,6 +40,10 @@ vec3 sample_offset_directions[20] = vec3[](
 );
 
 float calculate_shadow() {
+  if (!shadows_enabled) {
+    return 0.0;
+  }
+
   vec3 frag_to_light = v_position_world_space - light_position;
   frag_to_light *= vec3(1, 1, -1); // TODO Not sure why this is needed
 

@@ -2,6 +2,7 @@ use crate::Kanvas;
 
 pub struct DebugUi {
     pub is_visible: bool,
+    pub shadows_enabled: bool,
     context: imgui::Context,
     renderer: imgui_wgpu::Renderer,
     platform: imgui_winit_support::WinitPlatform,
@@ -58,6 +59,7 @@ impl DebugUi {
 
         DebugUi {
             is_visible: false,
+            shadows_enabled: true,
             context,
             renderer,
             platform,
@@ -104,12 +106,12 @@ impl DebugUi {
 
         {
             let window = imgui::Window::new(imgui::im_str!("Shadow Debug"));
+            let mut shadows_enabled = self.shadows_enabled;
             window
                 .content_size([128.0 * 3.0, 0.0])
                 .resizable(false)
                 .build(&ui, || {
-                    let mut is_enabled = true;
-                    ui.checkbox(imgui::im_str!("Shadows enabled"), &mut is_enabled);
+                    ui.checkbox(imgui::im_str!("Shadows enabled"), &mut shadows_enabled);
                     ui.separator();
                     ui.columns(3, imgui::im_str!("Columnz"), false);
                     for image in images {
@@ -118,6 +120,8 @@ impl DebugUi {
                     }
                     ui.columns(1, imgui::im_str!("Columnz"), false);
                 });
+
+            self.shadows_enabled = shadows_enabled;
         }
 
         if self.last_cursor != ui.mouse_cursor() {

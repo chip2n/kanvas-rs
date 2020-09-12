@@ -1,6 +1,7 @@
 use crate::model;
 use crate::shadow;
 use std::ops::Range;
+use wgpu::util::DeviceExt;
 
 pub struct Light {
     pub position: cgmath::Vector3<f32>,
@@ -39,6 +40,63 @@ pub struct LightRaw {
     _padding: u32,
     pub color: cgmath::Vector3<f32>,
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+struct LightConfigRaw {
+    pub shadows_enabled: bool,
+    _padding: [u8; 3],
+}
+
+pub struct LightConfig {
+    pub shadows_enabled: bool,
+    buffer: wgpu::Buffer,
+}
+
+impl LightConfig {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let shadows_enabled = true;
+        let contents = LightConfigRaw {
+            shadows_enabled,
+            _padding: [0; 3],
+        };
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&[contents]),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        });
+        LightConfig {
+            shadows_enabled,
+            buffer,
+        }
+    }
+
+    pub fn upload(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(&self.to_raw()));
+    }
+
+    pub fn binding_resource(&self) -> wgpu::BindingResource {
+        wgpu::BindingResource::Buffer {
+            buffer: &self.buffer,
+            offset: 0,
+            size: None,
+        }
+    }
+
+    pub fn binding_size() -> Option<wgpu::BufferSize> {
+        wgpu::BufferSize::new(std::mem::size_of::<LightConfigRaw>() as _)
+    }
+
+    fn to_raw(&self) -> LightConfigRaw {
+        LightConfigRaw {
+            shadows_enabled: self.shadows_enabled,
+            _padding: [0; 3],
+        }
+    }
+}
+
+unsafe impl bytemuck::Zeroable for LightConfigRaw {}
+unsafe impl bytemuck::Pod for LightConfigRaw {}
 
 pub enum LightType {
     Directional,
