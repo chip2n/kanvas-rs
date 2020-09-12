@@ -350,17 +350,6 @@ impl<'a> ShadowPassRenderData<'a> {
     }
 }
 
-pub fn create_light_proj(light: &light::Light) -> cgmath::Matrix4<f32> {
-    let light_proj = create_proj_mat(&light.light_type);
-    let light_view = cgmath::Matrix4::look_at(
-        cgmath::EuclideanSpace::from_vec(light.position),
-        cgmath::Point3::new(0.0, 0.0, 0.0),
-        cgmath::Vector3::unit_y(),
-    );
-
-    light_proj * light_view
-}
-
 pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Matrix4<f32>> {
     let light_proj = create_proj_mat(&light::LightType::Point);
     let transforms = vec![
