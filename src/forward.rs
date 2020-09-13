@@ -1,11 +1,11 @@
 use crate::camera;
+use crate::geometry::Vertex;
 use crate::light;
 use crate::model;
 use crate::pipeline;
 use crate::texture;
 use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
-use model::Vertex;
 use wgpu::util::DeviceExt;
 
 pub struct ForwardPass {

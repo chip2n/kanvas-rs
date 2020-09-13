@@ -1,3 +1,4 @@
+use crate::geometry::Vertex;
 use crate::texture;
 use std::ops::Range;
 use std::path::Path;
@@ -328,10 +329,6 @@ impl Model {
 
         Ok((Self { meshes, materials }, command_buffers))
     }
-}
-
-pub trait Vertex {
-    fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a>;
 }
 
 #[repr(C)]

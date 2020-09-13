@@ -1,3 +1,4 @@
+mod geometry;
 mod camera;
 mod debug;
 mod forward;
@@ -14,7 +15,7 @@ use model::DrawModel;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
-use model::Vertex;
+use geometry::Vertex;
 use std::iter;
 use wgpu::util::DeviceExt;
 use winit::{

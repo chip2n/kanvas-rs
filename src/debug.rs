@@ -1,63 +1,7 @@
-use crate::model::Vertex;
+use crate::geometry;
+use crate::geometry::Vertex;
 use crate::{compile_frag, compile_vertex};
 use wgpu::util::DeviceExt;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct SimpleVertex {
-    position: cgmath::Vector3<f32>,
-    tex_coords: cgmath::Vector2<f32>,
-}
-
-unsafe impl bytemuck::Pod for SimpleVertex {}
-unsafe impl bytemuck::Zeroable for SimpleVertex {}
-
-impl Vertex for SimpleVertex {
-    fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        use std::mem;
-        wgpu::VertexBufferDescriptor {
-            // how wide a vertex is (shader skips this number of bytes to get to the next one)
-            stride: mem::size_of::<SimpleVertex>() as wgpu::BufferAddress,
-
-            // how often shader should move to the next vertex (e.g. for instancing)
-            step_mode: wgpu::InputStepMode::Vertex,
-
-            attributes: &[
-                wgpu::VertexAttributeDescriptor {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float3,
-                },
-                wgpu::VertexAttributeDescriptor {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float2,
-                },
-            ],
-        }
-    }
-}
-
-const PLANE_VERTICES: [SimpleVertex; 4] = [
-    SimpleVertex {
-        position: cgmath::Vector3::new(-1.0, -1.0, 0.0),
-        tex_coords: cgmath::Vector2::new(0.0, 1.0),
-    },
-    SimpleVertex {
-        position: cgmath::Vector3::new(1.0, -1.0, 0.0),
-        tex_coords: cgmath::Vector2::new(1.0, 1.0),
-    },
-    SimpleVertex {
-        position: cgmath::Vector3::new(1.0, 1.0, 0.0),
-        tex_coords: cgmath::Vector2::new(1.0, 0.0),
-    },
-    SimpleVertex {
-        position: cgmath::Vector3::new(-1.0, 1.0, 0.0),
-        tex_coords: cgmath::Vector2::new(0.0, 0.0),
-    },
-];
-
-const PLANE_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 pub struct DebugPass {
     vertex_buffer: wgpu::Buffer,
@@ -71,16 +15,14 @@ impl DebugPass {
         shader_compiler: &mut shaderc::Compiler,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let verts = PLANE_VERTICES.clone();
-
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&verts),
+            contents: bytemuck::cast_slice(&geometry::PLANE_VERTICES),
             usage: wgpu::BufferUsage::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&PLANE_INDICES),
+            contents: bytemuck::cast_slice(&geometry::PLANE_INDICES),
             usage: wgpu::BufferUsage::INDEX,
         });
 
@@ -123,7 +65,7 @@ impl DebugPass {
                 depth_stencil_state: None,
                 vertex_state: wgpu::VertexStateDescriptor {
                     index_format: wgpu::IndexFormat::Uint16,
-                    vertex_buffers: &[SimpleVertex::desc()],
+                    vertex_buffers: &[geometry::SimpleVertex::desc()],
                 },
                 sample_count: 1,
                 sample_mask: !0,
@@ -157,10 +99,9 @@ impl DebugPass {
         });
 
         render_pass.set_pipeline(&self.pipeline);
-
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..));
         render_pass.set_bind_group(0, &texture_bind_group, &[]);
-        render_pass.draw_indexed(0..PLANE_INDICES.len() as u32, 0, 0..1);
+        render_pass.draw_indexed(0..geometry::PLANE_INDICES.len() as u32, 0, 0..1);
     }
 }
