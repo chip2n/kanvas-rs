@@ -321,12 +321,8 @@ impl State {
         .unwrap();
         kanvas.queue.submit(cmds);
 
-        let debug_pass = debug::DebugPass::new(
-            &kanvas.device,
-            &shadow_pass.target_bind_group_layout,
-            // TODO use own bind group layout?
-            &forward_pass.uniform_bind_group_layout,
-        );
+        let debug_pass =
+            debug::DebugPass::new(&kanvas.device, &shadow_pass.target_bind_group_layout);
 
         let debug_ui = ui::DebugUi::new(&kanvas);
 
@@ -529,18 +525,13 @@ impl State {
 
         // Render debug UI
         if self.debug_ui.is_visible {
-            for (i, tex) in self.debug_ui.shadow_textures().enumerate() {
-                let shadow_target = &self.shadow_pass.targets[i];
-                self.debug_pass.render(
-                    &mut encoder,
-                    &tex.view,
-                    &shadow_target.bind_group,
-                    &self.forward_pass.uniform_bind_group,
-                );
-            }
-
-            self.debug_ui
-                .render(&self.kanvas, &frame.output, &mut encoder);
+            self.debug_ui.render(
+                &self.kanvas,
+                &frame.output,
+                &mut encoder,
+                &self.debug_pass,
+                &self.shadow_pass.targets,
+            );
         }
 
         self.kanvas.queue.submit(iter::once(encoder.finish()));

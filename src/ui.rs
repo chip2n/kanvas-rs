@@ -1,3 +1,5 @@
+use crate::debug;
+use crate::shadow;
 use crate::Kanvas;
 
 pub struct DebugUi {
@@ -87,7 +89,14 @@ impl DebugUi {
         kanvas: &Kanvas,
         output: &wgpu::SwapChainTexture,
         encoder: &mut wgpu::CommandEncoder,
+        debug_pass: &debug::DebugPass,
+        shadow_targets: &[shadow::ShadowMapTarget; 6],
     ) {
+        for (i, tex) in self.shadow_textures().enumerate() {
+            let shadow_target = &shadow_targets[i];
+            debug_pass.render(encoder, &tex.view, &shadow_target.bind_group);
+        }
+
         self.platform
             .prepare_frame(self.context.io_mut(), &kanvas.window)
             .expect("Failed to prepare frame");
@@ -142,7 +151,7 @@ impl DebugUi {
             .expect("Rendering failed");
     }
 
-    pub fn shadow_textures<'a>(&'a self) -> impl Iterator<Item = &'a imgui_wgpu::Texture> + 'a {
+    fn shadow_textures<'a>(&'a self) -> impl Iterator<Item = &'a imgui_wgpu::Texture> + 'a {
         self.shadow_map_ids
             .iter()
             .map(move |id| self.get_texture(*id).unwrap())

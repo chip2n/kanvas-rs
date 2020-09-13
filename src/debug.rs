@@ -69,7 +69,6 @@ impl DebugPass {
     pub fn new(
         device: &wgpu::Device,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
-        globals_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let verts = PLANE_VERTICES.clone();
 
@@ -91,7 +90,7 @@ impl DebugPass {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render pipeline"),
                 push_constant_ranges: &[],
-                bind_group_layouts: &[&texture_bind_group_layout, globals_bind_group_layout],
+                bind_group_layouts: &[&texture_bind_group_layout],
             });
 
             let vs_module = compile_vertex!(&device, &mut shader_compiler, "debug.vert").unwrap();
@@ -146,10 +145,8 @@ impl DebugPass {
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
         texture_bind_group: &wgpu::BindGroup,
-        globals_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            // where we're going to draw our color to
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &output,
                 resolve_target: None,
@@ -166,7 +163,6 @@ impl DebugPass {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..));
         render_pass.set_bind_group(0, &texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &globals_bind_group, &[]);
         render_pass.draw_indexed(0..PLANE_INDICES.len() as u32, 0, 0..1);
     }
 }
