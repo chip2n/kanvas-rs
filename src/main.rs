@@ -321,8 +321,11 @@ impl State {
         .unwrap();
         kanvas.queue.submit(cmds);
 
-        let debug_pass =
-            debug::DebugPass::new(&kanvas.device, &shadow_pass.target_bind_group_layout);
+        let debug_pass = debug::DebugPass::new(
+            &kanvas.device,
+            &mut kanvas.shader_compiler,
+            &shadow_pass.target_bind_group_layout,
+        );
 
         let debug_ui = ui::DebugUi::new(&kanvas);
 

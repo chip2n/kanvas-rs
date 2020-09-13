@@ -68,6 +68,7 @@ pub struct DebugPass {
 impl DebugPass {
     pub fn new(
         device: &wgpu::Device,
+        shader_compiler: &mut shaderc::Compiler,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let verts = PLANE_VERTICES.clone();
@@ -83,9 +84,6 @@ impl DebugPass {
             usage: wgpu::BufferUsage::INDEX,
         });
 
-        // TODO pass this in
-        let mut shader_compiler = shaderc::Compiler::new().unwrap();
-
         let pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render pipeline"),
@@ -93,8 +91,8 @@ impl DebugPass {
                 bind_group_layouts: &[&texture_bind_group_layout],
             });
 
-            let vs_module = compile_vertex!(&device, &mut shader_compiler, "debug.vert").unwrap();
-            let fs_module = compile_frag!(&device, &mut shader_compiler, "debug.frag").unwrap();
+            let vs_module = compile_vertex!(&device, shader_compiler, "debug.vert").unwrap();
+            let fs_module = compile_frag!(&device, shader_compiler, "debug.frag").unwrap();
 
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("debug"),
