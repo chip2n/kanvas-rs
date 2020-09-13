@@ -9,6 +9,9 @@ mod shadow;
 mod texture;
 mod ui;
 
+use light::DrawLight;
+use model::DrawModel;
+
 use cgmath::prelude::*;
 use futures::executor::block_on;
 use model::Vertex;
@@ -469,56 +472,29 @@ impl State {
         let frame = self.kanvas.frame();
         let mut encoder = self.kanvas.create_encoder();
 
-        self.render_with_encoder(&mut encoder, &frame.output);
-
-        for (i, tex) in self.debug_ui.shadow_textures().enumerate() {
-            let shadow_target = &self.shadow_pass.targets[i];
-            self.debug_pass.render(
-                &mut encoder,
-                &tex.view,
-                &shadow_target.bind_group,
-                &self.forward_pass.uniform_bind_group,
-            );
-        }
-
-        self.debug_ui
-            .render(&self.kanvas, &frame.output, &mut encoder);
-
-        self.kanvas.queue.submit(iter::once(encoder.finish()));
-    }
-
-    fn render_with_encoder(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        frame: &wgpu::SwapChainTexture,
-    ) {
-        use light::DrawLight;
-        use model::DrawModel;
-
-        let back_color = wgpu::Color {
-            r: 0.1,
-            g: 0.2,
-            b: 0.3,
-            a: 1.0,
-        };
-
         // clear the screen
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
+                attachment: &frame.output.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(back_color),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
                     store: true,
                 },
             }],
             depth_stencil_attachment: None,
         });
 
+        // render shadow maps
         if self.light_config.shadows_enabled {
             for face_index in 0..6 {
                 // shadow pass
-                let mut pass = self.shadow_pass.begin(encoder, face_index);
+                let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
                 for mesh in &self.obj_model.meshes {
                     pass.render(
                         shadow::ShadowPassRenderData::from_mesh(&mesh, &self.instances_bind_group),
@@ -526,12 +502,12 @@ impl State {
                     );
                 }
             }
-            self.shadow_pass.copy_to_cubemap(encoder);
+            self.shadow_pass.copy_to_cubemap(&mut encoder);
         }
 
         {
             // forward pass
-            let mut render_pass = self.forward_pass.begin(&frame.view, encoder);
+            let mut render_pass = self.forward_pass.begin(&frame.output.view, &mut encoder);
             render_pass.set_pipeline(&self.forward_pass.pipeline);
 
             render_pass.draw_model_instanced(
@@ -550,5 +526,23 @@ impl State {
                 &self.light_bind_group,
             );
         }
+
+        // Render debug UI
+        if self.debug_ui.is_visible {
+            for (i, tex) in self.debug_ui.shadow_textures().enumerate() {
+                let shadow_target = &self.shadow_pass.targets[i];
+                self.debug_pass.render(
+                    &mut encoder,
+                    &tex.view,
+                    &shadow_target.bind_group,
+                    &self.forward_pass.uniform_bind_group,
+                );
+            }
+
+            self.debug_ui
+                .render(&self.kanvas, &frame.output, &mut encoder);
+        }
+
+        self.kanvas.queue.submit(iter::once(encoder.finish()));
     }
 }

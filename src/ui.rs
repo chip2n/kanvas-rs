@@ -88,10 +88,6 @@ impl DebugUi {
         output: &wgpu::SwapChainTexture,
         encoder: &mut wgpu::CommandEncoder,
     ) {
-        if !self.is_visible {
-            return;
-        }
-
         self.platform
             .prepare_frame(self.context.io_mut(), &kanvas.window)
             .expect("Failed to prepare frame");
