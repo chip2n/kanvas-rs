@@ -46,17 +46,26 @@ pub fn create(
         rasterization_state.depth_bias = config.bias;
         rasterization_state.depth_bias_slope_scale = config.bias_slope_scale;
         rasterization_state.depth_bias_clamp = config.bias_clamp;
-        rasterization_state.clamp_depth = device.features().contains(wgpu::Features::DEPTH_CLAMPING);
+        rasterization_state.clamp_depth =
+            device.features().contains(wgpu::Features::DEPTH_CLAMPING);
     }
 
     let color_states: Vec<wgpu::ColorStateDescriptor> = match color_format {
-        Some(format) => vec!(wgpu::ColorStateDescriptor {
+        Some(format) => vec![wgpu::ColorStateDescriptor {
             format,
-            color_blend: wgpu::BlendDescriptor::REPLACE,
-            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            color_blend: wgpu::BlendDescriptor {
+                src_factor: wgpu::BlendFactor::SrcAlpha,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha_blend: wgpu::BlendDescriptor {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::Zero,
+                operation: wgpu::BlendOperation::Add,
+            },
             write_mask: wgpu::ColorWrite::ALL,
-        }), 
-        None => vec!(),
+        }],
+        None => vec![],
     };
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

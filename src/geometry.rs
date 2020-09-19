@@ -1,3 +1,6 @@
+use crate::model;
+use wgpu::util::DeviceExt;
+
 pub const PLANE_VERTICES: [SimpleVertex; 4] = [
     SimpleVertex {
         position: cgmath::Vector3::new(-1.0, -1.0, 0.0),
@@ -17,7 +20,46 @@ pub const PLANE_VERTICES: [SimpleVertex; 4] = [
     },
 ];
 
-pub const PLANE_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
+pub const PLANE_INDICES: &[u32] = &[0, 1, 2, 0, 2, 3];
+
+pub struct Plane {
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+}
+
+impl Plane {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&PLANE_VERTICES),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&PLANE_INDICES),
+            usage: wgpu::BufferUsage::INDEX,
+        });
+        Plane {
+            vertex_buffer,
+            index_buffer,
+        }
+    }
+
+    pub fn render<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+        material: &'a model::Material,
+        uniforms_bind_group: &'a wgpu::BindGroup,
+        instances_bind_group: &'a wgpu::BindGroup,
+    ) {
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..));
+        render_pass.set_bind_group(0, &material.bind_group, &[]);
+        render_pass.set_bind_group(1, &uniforms_bind_group, &[]);
+        render_pass.set_bind_group(2, &instances_bind_group, &[]);
+        render_pass.draw_indexed(0..PLANE_INDICES.len() as u32, 0, 0..1);
+    }
+}
 
 pub trait Vertex {
     fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a>;

@@ -1,7 +1,8 @@
-mod geometry;
+mod billboard;
 mod camera;
 mod debug;
 mod forward;
+mod geometry;
 mod light;
 mod model;
 mod pipeline;
@@ -166,6 +167,7 @@ struct State {
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
     obj_model: model::Model,
+    billboard: billboard::Billboard,
     light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
@@ -322,6 +324,24 @@ impl State {
         .unwrap();
         kanvas.queue.submit(cmds);
 
+        let (bulb_texture, cmd) =
+            texture::Texture::load(&kanvas.device, "res/tex/bulb.png", false).unwrap();
+        kanvas.queue.submit(std::iter::once(cmd));
+        let (static_normal_map_texture, cmd) =
+            texture::Texture::load(&kanvas.device, "res/tex/normal_map_static.png", true).unwrap();
+        kanvas.queue.submit(std::iter::once(cmd));
+
+        let material = model::Material::new(
+            &kanvas.device,
+            "Test",
+            bulb_texture,
+            static_normal_map_texture,
+            &forward_pass.texture_bind_group_layout,
+        );
+
+        let mut billboard =
+            billboard::Billboard::new(&kanvas, material, &forward_pass.instances_bind_group_layout);
+
         let debug_pass = debug::DebugPass::new(
             &kanvas.device,
             &mut kanvas.shader_compiler,
@@ -340,6 +360,7 @@ impl State {
             instances_bind_group,
             instances,
             obj_model,
+            billboard,
             light_model,
             light,
             light_buffer,
@@ -466,6 +487,12 @@ impl State {
             .update_light(&self.kanvas.queue, &self.light);
 
         self.kanvas.queue.submit(iter::once(encoder.finish()));
+
+        // Update billboard
+        self.billboard.update(&self.kanvas, &self.camera);
+
+        // Update ui
+        self.debug_ui.camera_pos = self.camera.position;
     }
 
     fn render(&mut self) {
@@ -516,6 +543,12 @@ impl State {
                 &self.forward_pass.uniform_bind_group,
                 &self.instances_bind_group,
                 &self.light_bind_group,
+            );
+
+            render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
+            self.billboard.render(
+                &mut render_pass,
+                &self.forward_pass.uniform_bind_group,
             );
 
             render_pass.set_pipeline(&self.light_render_pipeline);

@@ -20,6 +20,7 @@ pub struct ForwardPass {
 
     pub depth_texture: texture::Texture,
     pub pipeline: wgpu::RenderPipeline,
+    pub billboard_pipeline: wgpu::RenderPipeline,
 }
 
 impl ForwardPass {
@@ -35,7 +36,7 @@ impl ForwardPass {
                             ty: wgpu::BindingType::SampledTexture {
                                 multisampled: false,
                                 dimension: wgpu::TextureViewDimension::D2,
-                                component_type: wgpu::TextureComponentType::Uint,
+                                component_type: wgpu::TextureComponentType::Float,
                             },
                             count: None,
                         },
@@ -50,8 +51,8 @@ impl ForwardPass {
                             visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::SampledTexture {
                                 multisampled: false,
-                                component_type: wgpu::TextureComponentType::Float,
                                 dimension: wgpu::TextureViewDimension::D2,
+                                component_type: wgpu::TextureComponentType::Float,
                             },
                             count: None,
                         },
@@ -207,6 +208,13 @@ impl ForwardPass {
             )
         };
 
+        let billboard_pipeline = crate::billboard::create_pipeline(
+            kanvas,
+            &texture_bind_group_layout,
+            &uniform_bind_group_layout,
+            &instances_bind_group_layout,
+        );
+
         ForwardPass {
             texture_bind_group_layout,
             instances_bind_group_layout,
@@ -219,6 +227,7 @@ impl ForwardPass {
 
             depth_texture,
             pipeline,
+            billboard_pipeline,
         }
     }
 

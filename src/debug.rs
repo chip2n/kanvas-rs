@@ -64,7 +64,7 @@ impl DebugPass {
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
                 depth_stencil_state: None,
                 vertex_state: wgpu::VertexStateDescriptor {
-                    index_format: wgpu::IndexFormat::Uint16,
+                    index_format: wgpu::IndexFormat::Uint32,
                     vertex_buffers: &[geometry::SimpleVertex::desc()],
                 },
                 sample_count: 1,

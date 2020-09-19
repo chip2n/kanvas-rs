@@ -402,7 +402,7 @@ impl Instance {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct InstanceRaw {
-    model: cgmath::Matrix4<f32>,
+    pub model: cgmath::Matrix4<f32>,
 }
 
 unsafe impl bytemuck::Pod for InstanceRaw {}

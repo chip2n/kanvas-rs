@@ -5,6 +5,7 @@ use crate::Kanvas;
 pub struct DebugUi {
     pub is_visible: bool,
     pub shadows_enabled: bool,
+    pub camera_pos: cgmath::Point3<f32>,
     pub context: imgui::Context,
     renderer: imgui_wgpu::Renderer,
     platform: imgui_winit_support::WinitPlatform,
@@ -62,6 +63,7 @@ impl DebugUi {
         DebugUi {
             is_visible: false,
             shadows_enabled: true,
+            camera_pos: cgmath::Point3::new(0.0, 0.0, 0.0),
             context,
             renderer,
             platform,
@@ -110,9 +112,24 @@ impl DebugUi {
             .collect();
 
         {
+            let camera_pos = self.camera_pos;
+            let window = imgui::Window::new(imgui::im_str!("Game world"));
+            window
+                .position([64.0, 64.0], imgui::Condition::FirstUseEver)
+                .content_size([256.0, 128.0])
+                .build(&ui, || {
+                    ui.text("Camera position:");
+                    ui.text(format!("- x: {:.2}", camera_pos.x));
+                    ui.text(format!("- y: {:.2}", camera_pos.y));
+                    ui.text(format!("- z: {:.2}", camera_pos.z));
+                });
+        }
+
+        {
             let window = imgui::Window::new(imgui::im_str!("Shadow Debug"));
             let mut shadows_enabled = self.shadows_enabled;
             window
+                .position([64.0, 256.0], imgui::Condition::FirstUseEver)
                 .content_size([128.0 * 3.0, 0.0])
                 .resizable(false)
                 .build(&ui, || {
