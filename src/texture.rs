@@ -1,3 +1,4 @@
+use anyhow::Context;
 use image::GenericImageView;
 use std::path::Path;
 use wgpu::util::DeviceExt;
@@ -17,9 +18,11 @@ impl Texture {
         path: P,
         is_normal_map: bool,
     ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
-        let path_copy = path.as_ref().to_path_buf();
+        let path = path.as_ref();
+        let path_copy = path.to_path_buf();
         let label = path_copy.to_str();
-        let img = image::open(path)?;
+        let img = image::open(path)
+            .with_context(|| format!("texture path: {}", path.to_string_lossy()))?;
         Self::from_image(device, &img, label, is_normal_map)
     }
 
