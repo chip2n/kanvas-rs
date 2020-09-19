@@ -11,7 +11,28 @@ pub mod shadow;
 pub mod texture;
 pub mod ui;
 
+use model::{Material, MaterialId};
+use std::collections::HashMap;
 use winit::window::Window;
+
+#[derive(Default)]
+pub struct Materials {
+    next_id: u32,
+    materials: HashMap<MaterialId, Material>,
+}
+
+impl Materials {
+    pub fn insert(&mut self, material: Material) -> MaterialId {
+        let id = self.next_id;
+        self.materials.insert(id, material);
+        self.next_id += 1;
+        id
+    }
+
+    pub fn get<'a>(&'a self, id: MaterialId) -> &'a Material {
+        &self.materials[&id]
+    }
+}
 
 pub struct Kanvas {
     pub window: Window,
@@ -21,6 +42,7 @@ pub struct Kanvas {
     pub sc_desc: wgpu::SwapChainDescriptor,
     pub swap_chain: wgpu::SwapChain,
     pub shader_compiler: shaderc::Compiler,
+    pub materials: Materials,
 }
 
 impl Kanvas {
@@ -61,6 +83,8 @@ impl Kanvas {
 
         let shader_compiler = shaderc::Compiler::new().unwrap();
 
+        let materials = Materials::default();
+
         Kanvas {
             window,
             surface,
@@ -69,6 +93,7 @@ impl Kanvas {
             sc_desc,
             swap_chain,
             shader_compiler,
+            materials,
         }
     }
 
@@ -87,5 +112,28 @@ impl Kanvas {
         self.swap_chain
             .get_current_frame()
             .expect("Timeout getting texture")
+    }
+
+    pub fn create_material(
+        &mut self,
+        name: &str,
+        diffuse_texture: texture::Texture,
+        normal_texture: texture::Texture,
+        layout: &wgpu::BindGroupLayout,
+    ) -> MaterialId {
+        self.materials.insert(Material::new(
+            &self.device,
+            name,
+            diffuse_texture,
+            normal_texture,
+            layout,
+        ))
+    }
+
+    pub fn get_material(
+        &self,
+        id: MaterialId,
+    ) -> &Material {
+        &self.materials.get(id)
     }
 }

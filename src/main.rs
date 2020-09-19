@@ -78,7 +78,7 @@ struct State {
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
     obj_model: model::Model,
-    billboard: billboard::Billboard,
+    billboards: Vec<billboard::Billboard>,
     light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
@@ -242,16 +242,27 @@ impl State {
             texture::Texture::load(&kanvas.device, "res/tex/normal_map_static.png", true).unwrap();
         kanvas.queue.submit(std::iter::once(cmd));
 
-        let material = model::Material::new(
-            &kanvas.device,
-            "Test",
+        let light_bulb_material = kanvas.create_material(
+            "Light bulb",
             bulb_texture,
             static_normal_map_texture,
             &forward_pass.texture_bind_group_layout,
         );
 
-        let billboard =
-            billboard::Billboard::new(&kanvas, material, &forward_pass.instances_bind_group_layout);
+        let billboards = vec![
+            billboard::Billboard::new(
+                &kanvas,
+                (0.0, 10.0, 0.0).into(),
+                light_bulb_material,
+                &forward_pass.instances_bind_group_layout,
+            ),
+            billboard::Billboard::new(
+                &kanvas,
+                (0.0, 12.0, 0.0).into(),
+                light_bulb_material,
+                &forward_pass.instances_bind_group_layout,
+            ),
+        ];
 
         let debug_pass = debug::DebugPass::new(
             &kanvas.device,
@@ -271,7 +282,7 @@ impl State {
             instances_bind_group,
             instances,
             obj_model,
-            billboard,
+            billboards,
             light_model,
             light,
             light_buffer,
@@ -400,7 +411,9 @@ impl State {
         self.kanvas.queue.submit(iter::once(encoder.finish()));
 
         // Update billboard
-        self.billboard.update(&self.kanvas, &self.camera);
+        for billboard in self.billboards.iter_mut() {
+            billboard.update(&self.kanvas, &self.camera);
+        }
 
         // Update ui
         self.debug_ui.camera_pos = self.camera.position;
@@ -457,8 +470,14 @@ impl State {
             );
 
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
-            self.billboard
-                .render(&mut render_pass, &self.forward_pass.uniform_bind_group);
+            for billboard in &self.billboards {
+                let material = &self.kanvas.materials.get(billboard.material);
+                billboard.render(
+                    &mut render_pass,
+                    material,
+                    &self.forward_pass.uniform_bind_group,
+                );
+            }
 
             render_pass.set_pipeline(&self.light_render_pipeline);
 

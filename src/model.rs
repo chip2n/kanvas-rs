@@ -142,6 +142,8 @@ pub struct Model {
     pub materials: Vec<Material>,
 }
 
+pub type MaterialId = u32;
+
 pub struct Material {
     pub name: String,
     pub diffuse_texture: texture::Texture,

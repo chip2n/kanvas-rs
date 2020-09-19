@@ -7,27 +7,25 @@ use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
 use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
+use crate::model::MaterialId;
 
 pub struct Billboard {
     instance_buffer: wgpu::Buffer,
     pub instance_bind_group: wgpu::BindGroup,
-    position: cgmath::Point3<f32>,
-    material: model::Material,
+    position: cgmath::Vector3<f32>,
+    pub material: MaterialId,
     plane: geometry::Plane,
 }
 
 impl Billboard {
     pub fn new(
         kanvas: &Kanvas,
-        material: model::Material,
+        position: cgmath::Vector3<f32>,
+        material: MaterialId,
         instances_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let instances = vec![model::Instance {
-            position: cgmath::Vector3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            },
+            position,
             rotation: cgmath::Quaternion::from_axis_angle(
                 cgmath::Vector3::unit_z(),
                 cgmath::Deg(0.0),
@@ -61,7 +59,7 @@ impl Billboard {
         Billboard {
             instance_buffer,
             instance_bind_group,
-            position: (0.0, 10.0, 0.0).into(),
+            position,
             material,
             plane: geometry::Plane::new(&kanvas.device),
         }
@@ -102,11 +100,12 @@ impl Billboard {
     pub fn render<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
+        material: &'a model::Material,
         uniforms_bind_group: &'a wgpu::BindGroup,
     ) {
         self.plane.render(
             render_pass,
-            &self.material,
+            material,
             uniforms_bind_group,
             &self.instance_bind_group,
         );
