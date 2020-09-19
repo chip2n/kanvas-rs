@@ -846,7 +846,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kanvas-rs"
+name = "kanvas"
 version = "0.1.0"
 dependencies = [
  "anyhow",
