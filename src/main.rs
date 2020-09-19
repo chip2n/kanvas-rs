@@ -339,7 +339,7 @@ impl State {
             &forward_pass.texture_bind_group_layout,
         );
 
-        let mut billboard =
+        let billboard =
             billboard::Billboard::new(&kanvas, material, &forward_pass.instances_bind_group_layout);
 
         let debug_pass = debug::DebugPass::new(
@@ -546,10 +546,8 @@ impl State {
             );
 
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
-            self.billboard.render(
-                &mut render_pass,
-                &self.forward_pass.uniform_bind_group,
-            );
+            self.billboard
+                .render(&mut render_pass, &self.forward_pass.uniform_bind_group);
 
             render_pass.set_pipeline(&self.light_render_pipeline);
 
