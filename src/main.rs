@@ -251,20 +251,17 @@ impl State {
 
         let mut billboards = billboard::Billboards::new(&kanvas);
 
-        billboards.insert(
-            &kanvas,
-            billboard::Billboard {
-                position: (0.0, 10.0, 0.0).into(),
-                material: light_bulb_material,
-            },
-        );
-        billboards.insert(
-            &kanvas,
-            billboard::Billboard {
-                position: (0.0, 15.0, 0.0).into(),
-                material: light_bulb_material,
-            },
-        );
+        for x in 0..100 {
+            for y in 0..100 {
+                billboards.insert(
+                    &kanvas,
+                    billboard::Billboard {
+                        position: (x as f32 * 2.0 - 50.0, 10.0, y as f32 * 2.0 - 50.0).into(),
+                        material: light_bulb_material,
+                    },
+                );
+            }
+        }
 
         let debug_pass = debug::DebugPass::new(
             &kanvas.device,

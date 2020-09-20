@@ -8,7 +8,7 @@ use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
 use std::collections::HashMap;
 
-const MAX_BILLBOARDS: u64 = 100;
+const MAX_BILLBOARDS: u64 = 10000;
 
 pub type BillboardId = usize;
 
