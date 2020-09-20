@@ -1,9 +1,9 @@
+use futures::executor::block_on;
+use geometry::Vertex;
 use kanvas::prelude::*;
 use kanvas::*;
 use light::DrawLight;
 use model::DrawModel;
-use futures::executor::block_on;
-use geometry::Vertex;
 use std::iter;
 use wgpu::util::DeviceExt;
 use winit::{
@@ -16,8 +16,8 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let kanvas = block_on(Kanvas::new(window));
-    let mut state = State::new(kanvas);
+    let context = block_on(Context::new(window));
+    let mut state = State::new(context);
 
     let mut last_render_time = std::time::Instant::now();
 
@@ -26,7 +26,7 @@ fn main() {
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == state.kanvas.window.id() => {
+            } if window_id == state.context.window.id() => {
                 if !state.input(event) {
                     match event {
                         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -59,16 +59,16 @@ fn main() {
                 state.render();
             }
             Event::MainEventsCleared => {
-                state.kanvas.window.request_redraw();
+                state.context.window.request_redraw();
             }
             _ => {}
         }
-        state.debug_ui.handle_event(&state.kanvas.window, &event);
+        state.debug_ui.handle_event(&state.context.window, &event);
     });
 }
 
 struct State {
-    kanvas: Kanvas,
+    context: Context,
     light_render_pipeline: wgpu::RenderPipeline,
     camera: camera::Camera,
     projection: camera::PerspectiveProjection,
@@ -89,19 +89,19 @@ struct State {
 }
 
 impl State {
-    fn new(kanvas: Kanvas) -> State {
-        let mut kanvas = kanvas;
+    fn new(context: Context) -> State {
+        let mut context = context;
         let camera = camera::Camera::new((0.0, 10.0, 20.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection = camera::PerspectiveProjection::new(
-            kanvas.sc_desc.width,
-            kanvas.sc_desc.height,
+            context.sc_desc.width,
+            context.sc_desc.height,
             cgmath::Deg(45.0),
             0.1,
             100.0,
         );
         let camera_controller = camera::CameraController::new(4.0, 0.8);
 
-        let forward_pass = forward::ForwardPass::new(&mut kanvas);
+        let forward_pass = forward::ForwardPass::new(&mut context);
 
         let instances = vec![model::Instance {
             position: Vector3 {
@@ -115,7 +115,7 @@ impl State {
             .iter()
             .map(model::Instance::to_raw)
             .collect::<Vec<_>>();
-        let instance_buffer = kanvas
+        let instance_buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Instances"),
@@ -123,23 +123,25 @@ impl State {
                 usage: wgpu::BufferUsage::STORAGE,
             });
 
-        let instances_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &kanvas.instances_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &instance_buffer,
-                    offset: 0,
-                    size: None,
-                },
-            }],
-            label: Some("instances_bind_group"),
-        });
+        let instances_bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &context.instances_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &instance_buffer,
+                        offset: 0,
+                        size: None,
+                    },
+                }],
+                label: Some("instances_bind_group"),
+            });
 
         let light = light::Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
 
         // We'll want to update our lights position, so we use COPY_DST
-        let light_buffer = kanvas
+        let light_buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Lights"),
@@ -150,44 +152,48 @@ impl State {
         let vertex_descs = [model::ModelVertex::desc()];
 
         let shadow_pass = shadow::ShadowPass::new(
-            &kanvas.device,
-            &mut kanvas.shader_compiler,
-            &kanvas.instances_bind_group_layout,
+            &context.device,
+            &mut context.shader_compiler,
+            &context.instances_bind_group_layout,
             &vertex_descs,
         );
 
-        let light_config = light::LightConfig::new(&kanvas.device);
+        let light_config = light::LightConfig::new(&context.device);
 
         // TODO do some of this in shadow pass?
-        let light_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &forward_pass.light_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &light_buffer,
-                        offset: 0,
-                        size: None,
+        let light_bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &forward_pass.light_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer {
+                            buffer: &light_buffer,
+                            offset: 0,
+                            size: None,
+                        },
                     },
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&shadow_pass.cube_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&shadow_pass.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: light_config.binding_resource(),
-                },
-            ],
-            label: None,
-        });
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(
+                            &shadow_pass.cube_texture_view,
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&shadow_pass.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: light_config.binding_resource(),
+                    },
+                ],
+                label: None,
+            });
 
         let light_render_pipeline = {
-            let layout = kanvas
+            let layout = context
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Light render pipeline"),
@@ -199,58 +205,59 @@ impl State {
                 });
 
             let vs_module =
-                compile_vertex!(&kanvas.device, &mut kanvas.shader_compiler, "light.vert").unwrap();
+                compile_vertex!(&context.device, &mut context.shader_compiler, "light.vert")
+                    .unwrap();
             let fs_module =
-                compile_frag!(&kanvas.device, &mut kanvas.shader_compiler, "light.frag").unwrap();
+                compile_frag!(&context.device, &mut context.shader_compiler, "light.frag").unwrap();
 
             pipeline::create(
                 &"light",
-                &kanvas.device,
+                &context.device,
                 &layout,
                 &vs_module,
                 &fs_module,
-                Some(kanvas.sc_desc.format),
+                Some(context.sc_desc.format),
                 Some(pipeline::DepthConfig::no_bias()),
                 &vertex_descs,
             )
         };
 
         let (obj_model, cmds) = model::Model::load(
-            &kanvas.device,
+            &context.device,
             &forward_pass.texture_bind_group_layout,
             "res/models/scene.obj",
         )
         .unwrap();
-        kanvas.queue.submit(cmds);
+        context.queue.submit(cmds);
 
         let (light_model, cmds) = model::Model::load(
-            &kanvas.device,
+            &context.device,
             &forward_pass.texture_bind_group_layout,
             "res/models/cube.obj",
         )
         .unwrap();
-        kanvas.queue.submit(cmds);
+        context.queue.submit(cmds);
 
         let (bulb_texture, cmd) =
-            texture::Texture::load(&kanvas.device, "res/tex/bulb.png", false).unwrap();
-        kanvas.queue.submit(std::iter::once(cmd));
+            texture::Texture::load(&context.device, "res/tex/bulb.png", false).unwrap();
+        context.queue.submit(std::iter::once(cmd));
         let (static_normal_map_texture, cmd) =
-            texture::Texture::load(&kanvas.device, "res/tex/normal_map_static.png", true).unwrap();
-        kanvas.queue.submit(std::iter::once(cmd));
+            texture::Texture::load(&context.device, "res/tex/normal_map_static.png", true).unwrap();
+        context.queue.submit(std::iter::once(cmd));
 
-        let light_bulb_material = kanvas.create_material(
+        let light_bulb_material = context.create_material(
             "Light bulb",
             bulb_texture,
             static_normal_map_texture,
             &forward_pass.texture_bind_group_layout,
         );
 
-        let mut billboards = billboard::Billboards::new(&kanvas);
+        let mut billboards = billboard::Billboards::new(&context);
 
         for x in 0..100 {
             for y in 0..100 {
                 billboards.insert(
-                    &kanvas,
+                    &context,
                     billboard::Billboard {
                         position: (x as f32 * 1.0 - 50.0, 10.0, y as f32 * 1.0 - 50.0).into(),
                         material: light_bulb_material,
@@ -260,15 +267,15 @@ impl State {
         }
 
         let debug_pass = debug::DebugPass::new(
-            &kanvas.device,
-            &mut kanvas.shader_compiler,
+            &context.device,
+            &mut context.shader_compiler,
             &shadow_pass.target_bind_group_layout,
         );
 
-        let debug_ui = ui::DebugUi::new(&kanvas);
+        let debug_ui = ui::DebugUi::new(&context);
 
         State {
-            kanvas,
+            context,
             light_render_pipeline,
             camera,
             projection,
@@ -290,9 +297,9 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.kanvas.resize(new_size);
+        self.context.resize(new_size);
         self.forward_pass
-            .resize(&self.kanvas.device, &self.kanvas.sc_desc);
+            .resize(&self.context.device, &self.context.sc_desc);
         self.projection.resize(new_size.width, new_size.height);
     }
 
@@ -342,14 +349,14 @@ impl State {
 
     fn grab_camera(&mut self) {
         self.camera_controller.is_active = true;
-        self.kanvas.window.set_cursor_visible(false);
-        self.kanvas.window.set_cursor_grab(true).unwrap();
+        self.context.window.set_cursor_visible(false);
+        self.context.window.set_cursor_grab(true).unwrap();
     }
 
     fn ungrab_camera(&mut self) {
         self.camera_controller.is_active = false;
-        self.kanvas.window.set_cursor_visible(true);
-        self.kanvas.window.set_cursor_grab(false).unwrap();
+        self.context.window.set_cursor_visible(true);
+        self.context.window.set_cursor_grab(false).unwrap();
     }
 
     fn handle_device_event(&mut self, event: &DeviceEvent) -> bool {
@@ -369,10 +376,10 @@ impl State {
             .uniforms
             .update_view_proj(&self.camera, &self.projection);
 
-        let mut encoder = self.kanvas.create_encoder();
+        let mut encoder = self.context.create_encoder();
 
         self.forward_pass
-            .upload_uniforms(&self.kanvas.device, &mut encoder);
+            .upload_uniforms(&self.context.device, &mut encoder);
 
         // Update the light
         let old_position = self.light.position;
@@ -381,7 +388,7 @@ impl State {
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * old_position;
         let staging_buffer =
-            self.kanvas
+            self.context
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Staging"),
@@ -398,23 +405,23 @@ impl State {
 
         // Update light config
         self.light_config.shadows_enabled = self.debug_ui.shadows_enabled;
-        self.light_config.upload(&self.kanvas.queue);
+        self.light_config.upload(&self.context.queue);
 
         self.shadow_pass
-            .update_light(&self.kanvas.queue, &self.light);
+            .update_light(&self.context.queue, &self.light);
 
-        self.kanvas.queue.submit(iter::once(encoder.finish()));
+        self.context.queue.submit(iter::once(encoder.finish()));
 
         // Update billboards
-        self.billboards.upload(&self.kanvas, &self.camera);
+        self.billboards.upload(&self.context, &self.camera);
 
         // Update ui
         self.debug_ui.camera_pos = self.camera.position;
     }
 
     fn render(&mut self) {
-        let frame = self.kanvas.frame();
-        let mut encoder = self.kanvas.create_encoder();
+        let frame = self.context.frame();
+        let mut encoder = self.context.create_encoder();
 
         // clear the screen
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -465,7 +472,7 @@ impl State {
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
             self.billboards.render(
                 &mut render_pass,
-                &self.kanvas.materials,
+                &self.context.materials,
                 &self.forward_pass.uniform_bind_group,
             );
 
@@ -481,7 +488,7 @@ impl State {
         // Render debug UI
         if self.debug_ui.is_visible {
             self.debug_ui.render(
-                &self.kanvas,
+                &self.context,
                 &frame.output,
                 &mut encoder,
                 &self.debug_pass,
@@ -489,6 +496,6 @@ impl State {
             );
         }
 
-        self.kanvas.queue.submit(iter::once(encoder.finish()));
+        self.context.queue.submit(iter::once(encoder.finish()));
     }
 }

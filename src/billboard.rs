@@ -5,7 +5,7 @@ use crate::model;
 use crate::model::MaterialId;
 use crate::pipeline;
 use crate::prelude::*;
-use crate::Kanvas;
+use crate::Context;
 use crate::{compile_frag, compile_vertex};
 use std::collections::HashMap;
 
@@ -32,8 +32,8 @@ pub struct Billboards {
 }
 
 impl Billboards {
-    pub fn new(kanvas: &Kanvas) -> Self {
-        let plane = geometry::Plane::new(&kanvas.device);
+    pub fn new(context: &Context) -> Self {
+        let plane = geometry::Plane::new(&context.device);
         Billboards {
             next_id: 0,
             billboards: HashMap::new(),
@@ -42,17 +42,17 @@ impl Billboards {
         }
     }
 
-    pub fn insert(&mut self, kanvas: &Kanvas, billboard: Billboard) -> BillboardId {
+    pub fn insert(&mut self, context: &Context, billboard: Billboard) -> BillboardId {
         let data = self.instances.entry(billboard.material).or_insert_with(|| {
-            let instance_buffer = kanvas.device.create_buffer(&wgpu::BufferDescriptor {
+            let instance_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("billboard_instances"),
                 size: MAX_BILLBOARDS * std::mem::size_of::<model::InstanceRaw>() as u64,
                 mapped_at_creation: false,
                 usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
             });
 
-            let instance_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &kanvas.instances_bind_group_layout,
+            let instance_bind_group = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &context.instances_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
@@ -79,7 +79,7 @@ impl Billboards {
         id
     }
 
-    pub fn upload(&self, kanvas: &Kanvas, camera: &camera::Camera) {
+    pub fn upload(&self, context: &Context, camera: &camera::Camera) {
         let instance_size = std::mem::size_of::<model::InstanceRaw>();
 
         // TODO don't recalculate view matrix
@@ -111,7 +111,7 @@ impl Billboards {
             };
 
             let buffer = &self.instances[&billboard.material].instance_buffer;
-            kanvas.queue.write_buffer(
+            context.queue.write_buffer(
                 buffer,
                 (id * instance_size) as u64,
                 bytemuck::bytes_of(&instance),
@@ -143,11 +143,11 @@ impl Billboards {
 }
 
 pub fn create_pipeline(
-    kanvas: &mut Kanvas,
+    context: &mut Context,
     texture_bind_group_layout: &wgpu::BindGroupLayout,
     uniform_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
-    let layout = kanvas
+    let layout = context
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render pipeline"),
@@ -155,30 +155,30 @@ pub fn create_pipeline(
             bind_group_layouts: &[
                 &texture_bind_group_layout,
                 &uniform_bind_group_layout,
-                &kanvas.instances_bind_group_layout,
+                &context.instances_bind_group_layout,
             ],
         });
 
     let vs_module = compile_vertex!(
-        &kanvas.device,
-        &mut kanvas.shader_compiler,
+        &context.device,
+        &mut context.shader_compiler,
         "billboard.vert"
     )
     .unwrap();
     let fs_module = compile_frag!(
-        &kanvas.device,
-        &mut kanvas.shader_compiler,
+        &context.device,
+        &mut context.shader_compiler,
         "billboard.frag"
     )
     .unwrap();
 
     pipeline::create(
         &"forward",
-        &kanvas.device,
+        &context.device,
         &layout,
         &vs_module,
         &fs_module,
-        Some(kanvas.sc_desc.format),
+        Some(context.sc_desc.format),
         Some(pipeline::DepthConfig::no_bias()),
         &[geometry::SimpleVertex::desc()],
     )

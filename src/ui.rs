@@ -1,6 +1,6 @@
 use crate::debug;
 use crate::shadow;
-use crate::Kanvas;
+use crate::Context;
 
 pub struct DebugUi {
     pub is_visible: bool,
@@ -14,21 +14,21 @@ pub struct DebugUi {
 }
 
 impl DebugUi {
-    pub fn new(kanvas: &Kanvas) -> Self {
+    pub fn new(context: &Context) -> Self {
         let hidpi_factor = 1.0;
-        let mut context = imgui::Context::create();
-        let mut platform = imgui_winit_support::WinitPlatform::init(&mut context);
+        let mut imgui_context = imgui::Context::create();
+        let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
         platform.attach_window(
-            context.io_mut(),
-            &kanvas.window,
+            imgui_context.io_mut(),
+            &context.window,
             imgui_winit_support::HiDpiMode::Locked(1.0),
         );
-        context.set_ini_filename(None);
+        imgui_context.set_ini_filename(None);
 
         let font_size = (13.0 * hidpi_factor) as f32;
-        context.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+        imgui_context.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
-        context
+        imgui_context
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData {
                 config: Some(imgui::FontConfig {
@@ -41,10 +41,10 @@ impl DebugUi {
 
         // Setup dear imgui wgpu renderer
         let mut renderer = imgui_wgpu::Renderer::new(
-            &mut context,
-            &kanvas.device,
-            &kanvas.queue,
-            kanvas.sc_desc.format,
+            &mut imgui_context,
+            &context.device,
+            &context.queue,
+            context.sc_desc.format,
             None,
             1,
         );
@@ -52,19 +52,19 @@ impl DebugUi {
         let last_cursor = None;
 
         let shadow_map_ids = [
-            create_texture(&kanvas.device, &mut renderer),
-            create_texture(&kanvas.device, &mut renderer),
-            create_texture(&kanvas.device, &mut renderer),
-            create_texture(&kanvas.device, &mut renderer),
-            create_texture(&kanvas.device, &mut renderer),
-            create_texture(&kanvas.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
+            create_texture(&context.device, &mut renderer),
         ];
 
         DebugUi {
             is_visible: false,
             shadows_enabled: true,
             camera_pos: cgmath::Point3::new(0.0, 0.0, 0.0),
-            context,
+            context: imgui_context,
             renderer,
             platform,
             last_cursor,
@@ -88,7 +88,7 @@ impl DebugUi {
 
     pub fn render(
         &mut self,
-        kanvas: &Kanvas,
+        context: &Context,
         output: &wgpu::SwapChainTexture,
         encoder: &mut wgpu::CommandEncoder,
         debug_pass: &debug::DebugPass,
@@ -100,7 +100,7 @@ impl DebugUi {
         }
 
         self.platform
-            .prepare_frame(self.context.io_mut(), &kanvas.window)
+            .prepare_frame(self.context.io_mut(), &context.window)
             .expect("Failed to prepare frame");
 
         let ui = self.context.frame();
@@ -148,7 +148,7 @@ impl DebugUi {
 
         if self.last_cursor != ui.mouse_cursor() {
             self.last_cursor = ui.mouse_cursor();
-            self.platform.prepare_render(&ui, &kanvas.window);
+            self.platform.prepare_render(&ui, &context.window);
         }
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -164,7 +164,7 @@ impl DebugUi {
         });
 
         self.renderer
-            .render(ui.render(), &kanvas.queue, &kanvas.device, &mut rpass)
+            .render(ui.render(), &context.queue, &context.device, &mut rpass)
             .expect("Rendering failed");
     }
 

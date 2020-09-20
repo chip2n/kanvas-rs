@@ -5,7 +5,7 @@ use crate::model;
 use crate::pipeline;
 use crate::prelude::*;
 use crate::texture;
-use crate::Kanvas;
+use crate::Context;
 use crate::{compile_frag, compile_vertex};
 use wgpu::util::DeviceExt;
 
@@ -24,9 +24,9 @@ pub struct ForwardPass {
 }
 
 impl ForwardPass {
-    pub fn new(kanvas: &mut Kanvas) -> Self {
+    pub fn new(context: &mut Context) -> Self {
         let texture_bind_group_layout =
-            kanvas
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     entries: &[
@@ -67,7 +67,7 @@ impl ForwardPass {
                 });
 
         let light_bind_group_layout =
-            kanvas
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     entries: &[
@@ -114,7 +114,7 @@ impl ForwardPass {
                 });
 
         let uniforms = Uniforms::new();
-        let uniform_buffer = kanvas
+        let uniform_buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Uniforms"),
@@ -123,7 +123,7 @@ impl ForwardPass {
             });
 
         let uniform_bind_group_layout =
-            kanvas
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     entries: &[wgpu::BindGroupLayoutEntry {
@@ -140,7 +140,7 @@ impl ForwardPass {
                     label: Some("uniform_bind_group_layout"),
                 });
 
-        let uniform_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let uniform_bind_group = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &uniform_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -154,13 +154,13 @@ impl ForwardPass {
         });
 
         let depth_texture = texture::Texture::create_depth_texture(
-            &kanvas.device,
-            &kanvas.sc_desc,
+            &context.device,
+            &context.sc_desc,
             "depth_texture",
         );
 
         let pipeline = {
-            let layout = kanvas
+            let layout = context
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Render pipeline"),
@@ -168,31 +168,31 @@ impl ForwardPass {
                     bind_group_layouts: &[
                         &texture_bind_group_layout,
                         &uniform_bind_group_layout,
-                        &kanvas.instances_bind_group_layout,
+                        &context.instances_bind_group_layout,
                         &light_bind_group_layout,
                     ],
                 });
 
             let vs_module =
-                compile_vertex!(&kanvas.device, &mut kanvas.shader_compiler, "shader.vert")
+                compile_vertex!(&context.device, &mut context.shader_compiler, "shader.vert")
                     .unwrap();
             let fs_module =
-                compile_frag!(&kanvas.device, &mut kanvas.shader_compiler, "shader.frag").unwrap();
+                compile_frag!(&context.device, &mut context.shader_compiler, "shader.frag").unwrap();
 
             pipeline::create(
                 &"forward",
-                &kanvas.device,
+                &context.device,
                 &layout,
                 &vs_module,
                 &fs_module,
-                Some(kanvas.sc_desc.format),
+                Some(context.sc_desc.format),
                 Some(pipeline::DepthConfig::no_bias()),
                 &[model::ModelVertex::desc()],
             )
         };
 
         let billboard_pipeline = crate::billboard::create_pipeline(
-            kanvas,
+            context,
             &texture_bind_group_layout,
             &uniform_bind_group_layout,
         );

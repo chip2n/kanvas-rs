@@ -39,7 +39,7 @@ impl Materials {
     }
 }
 
-pub struct Kanvas {
+pub struct Context {
     pub window: Window,
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
@@ -51,7 +51,7 @@ pub struct Kanvas {
     pub instances_bind_group_layout: wgpu::BindGroupLayout,
 }
 
-impl Kanvas {
+impl Context {
     pub async fn new(window: Window) -> Self {
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
 
@@ -106,7 +106,7 @@ impl Kanvas {
                 label: Some("instances_bind_group_layout"),
             });
 
-        Kanvas {
+        Context {
             window,
             surface,
             device,
