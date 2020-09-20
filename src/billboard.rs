@@ -42,6 +42,10 @@ impl Billboards {
         }
     }
 
+    pub fn get(&mut self, id: BillboardId) -> Option<&mut Billboard> {
+        self.billboards.get_mut(&id)
+    }
+
     pub fn insert(&mut self, context: &Context, billboard: Billboard) -> BillboardId {
         let data = self.instances.entry(billboard.material).or_insert_with(|| {
             let instance_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
@@ -84,6 +88,7 @@ impl Billboards {
 
         // TODO don't recalculate view matrix
         let view_mat = camera.calc_matrix();
+        let scale_mat = Matrix4::from_scale(0.5);
 
         for (id, billboard) in self.billboards.iter() {
             // From: https://swiftcoder.wordpress.com/2008/11/25/constructing-a-billboard-matrix/
@@ -107,7 +112,7 @@ impl Billboards {
                 1.0,
             );
             let instance = model::InstanceRaw {
-                model: billboard_transform,
+                model: billboard_transform * scale_mat,
             };
 
             let buffer = &self.instances[&billboard.material].instance_buffer;

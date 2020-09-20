@@ -2,7 +2,6 @@ use futures::executor::block_on;
 use geometry::Vertex;
 use kanvas::prelude::*;
 use kanvas::*;
-use light::DrawLight;
 use model::DrawModel;
 use std::iter;
 use wgpu::util::DeviceExt;
@@ -69,7 +68,6 @@ fn main() {
 
 struct State {
     context: Context,
-    light_render_pipeline: wgpu::RenderPipeline,
     camera: camera::Camera,
     projection: camera::PerspectiveProjection,
     camera_controller: camera::CameraController,
@@ -78,11 +76,11 @@ struct State {
     instances: Vec<model::Instance>,
     obj_model: model::Model,
     billboards: billboard::Billboards,
-    light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     light_config: light::LightConfig,
+    light_billboard: billboard::BillboardId,
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
@@ -115,13 +113,14 @@ impl State {
             .iter()
             .map(model::Instance::to_raw)
             .collect::<Vec<_>>();
-        let instance_buffer = context
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Instances"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsage::STORAGE,
-            });
+        let instance_buffer =
+            context
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Instances"),
+                    contents: bytemuck::cast_slice(&instance_data),
+                    usage: wgpu::BufferUsage::STORAGE,
+                });
 
         let instances_bind_group = context
             .device
@@ -192,48 +191,10 @@ impl State {
                 label: None,
             });
 
-        let light_render_pipeline = {
-            let layout = context
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Light render pipeline"),
-                    push_constant_ranges: &[],
-                    bind_group_layouts: &[
-                        &forward_pass.uniform_bind_group_layout,
-                        &forward_pass.light_bind_group_layout,
-                    ],
-                });
-
-            let vs_module =
-                compile_vertex!(&context.device, &mut context.shader_compiler, "light.vert")
-                    .unwrap();
-            let fs_module =
-                compile_frag!(&context.device, &mut context.shader_compiler, "light.frag").unwrap();
-
-            pipeline::create(
-                &"light",
-                &context.device,
-                &layout,
-                &vs_module,
-                &fs_module,
-                Some(context.sc_desc.format),
-                Some(pipeline::DepthConfig::no_bias()),
-                &vertex_descs,
-            )
-        };
-
         let (obj_model, cmds) = model::Model::load(
             &context.device,
             &forward_pass.texture_bind_group_layout,
             "res/models/scene.obj",
-        )
-        .unwrap();
-        context.queue.submit(cmds);
-
-        let (light_model, cmds) = model::Model::load(
-            &context.device,
-            &forward_pass.texture_bind_group_layout,
-            "res/models/cube.obj",
         )
         .unwrap();
         context.queue.submit(cmds);
@@ -253,18 +214,13 @@ impl State {
         );
 
         let mut billboards = billboard::Billboards::new(&context);
-
-        for x in 0..100 {
-            for y in 0..100 {
-                billboards.insert(
-                    &context,
-                    billboard::Billboard {
-                        position: (x as f32 * 1.0 - 50.0, 10.0, y as f32 * 1.0 - 50.0).into(),
-                        material: light_bulb_material,
-                    },
-                );
-            }
-        }
+        let light_billboard = billboards.insert(
+            &context,
+            billboard::Billboard {
+                position: light.position,
+                material: light_bulb_material,
+            },
+        );
 
         let debug_pass = debug::DebugPass::new(
             &context.device,
@@ -276,7 +232,6 @@ impl State {
 
         State {
             context,
-            light_render_pipeline,
             camera,
             projection,
             camera_controller,
@@ -285,11 +240,11 @@ impl State {
             instances,
             obj_model,
             billboards,
-            light_model,
             light,
             light_buffer,
             light_bind_group,
             light_config,
+            light_billboard,
             shadow_pass,
             debug_pass,
             debug_ui,
@@ -402,6 +357,9 @@ impl State {
             0,
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
+        if let Some(billboard) = self.billboards.get(self.light_billboard) {
+            billboard.position = self.light.position;
+        }
 
         // Update light config
         self.light_config.shadows_enabled = self.debug_ui.shadows_enabled;
@@ -474,14 +432,6 @@ impl State {
                 &mut render_pass,
                 &self.context.materials,
                 &self.forward_pass.uniform_bind_group,
-            );
-
-            render_pass.set_pipeline(&self.light_render_pipeline);
-
-            render_pass.draw_light_model(
-                &self.light_model,
-                &self.forward_pass.uniform_bind_group,
-                &self.light_bind_group,
             );
         }
 
