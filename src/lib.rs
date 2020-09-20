@@ -50,6 +50,7 @@ pub struct Context {
     pub shader_compiler: shaderc::Compiler,
     pub materials: Materials,
     pub instances_bind_group_layout: wgpu::BindGroupLayout,
+    pub light_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Context {
@@ -107,6 +108,50 @@ impl Context {
                 label: Some("instances_bind_group_layout"),
             });
 
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<
+                                light::LightRaw,
+                            >()
+                                as _),
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            component_type: wgpu::TextureComponentType::Float,
+                            dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: light::LightConfig::binding_size(),
+                        },
+                        count: None,
+                    },
+                ],
+                label: None,
+            });
+
         Context {
             window,
             surface,
@@ -117,6 +162,7 @@ impl Context {
             shader_compiler,
             materials,
             instances_bind_group_layout,
+            light_bind_group_layout,
         }
     }
 

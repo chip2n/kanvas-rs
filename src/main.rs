@@ -77,7 +77,6 @@ struct State {
     obj_model: model::Model,
     billboards: billboard::Billboards,
     lights: light::Lights,
-    light_billboard: billboard::BillboardId,
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
@@ -151,8 +150,6 @@ impl State {
         .unwrap();
         context.queue.submit(cmds);
 
-        let lights = light::Lights::new(&context, &forward_pass.light_bind_group_layout);
-
         let (bulb_texture, cmd) =
             texture::Texture::load(&context.device, "res/tex/bulb.png", false).unwrap();
         context.queue.submit(std::iter::once(cmd));
@@ -168,13 +165,8 @@ impl State {
         );
 
         let mut billboards = billboard::Billboards::new(&context);
-        let light_billboard = billboards.insert(
-            &context,
-            billboard::Billboard {
-                position: lights.lights[0].position,
-                material: light_bulb_material,
-            },
-        );
+
+        let lights = light::Lights::new(&context, &mut billboards, light_bulb_material);
 
         let debug_pass = debug::DebugPass::new(
             &context.device,
@@ -195,7 +187,6 @@ impl State {
             obj_model,
             billboards,
             lights,
-            light_billboard,
             shadow_pass,
             debug_pass,
             debug_ui,
@@ -288,28 +279,35 @@ impl State {
             .upload_uniforms(&self.context.device, &mut encoder);
 
         // Update the light
-        let old_position = self.lights.lights[0].position;
-        self.lights.lights[0].position = cgmath::Quaternion::from_axis_angle(
-            (0.0, 1.0, 0.0).into(),
-            cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * old_position;
-        let staging_buffer =
-            self.context
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Staging"),
-                    contents: bytemuck::cast_slice(&[self.lights.lights[0].to_raw()]),
-                    usage: wgpu::BufferUsage::COPY_SRC,
-                });
-        encoder.copy_buffer_to_buffer(
-            &staging_buffer,
-            0,
-            &self.lights.buffer,
-            0,
-            std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
-        );
-        if let Some(billboard) = self.billboards.get(self.light_billboard) {
-            billboard.position = self.lights.lights[0].position;
+        {
+            for light in self.lights.lights.iter_mut() {
+                let old_position = light.position;
+                light.position = cgmath::Quaternion::from_axis_angle(
+                    (0.0, 1.0, 0.0).into(),
+                    cgmath::Deg(60.0 * dt.as_secs_f32()),
+                ) * old_position;
+
+                if let Some(billboard) = self.billboards.get(light.billboard) {
+                    billboard.position = light.position;
+                }
+            }
+
+            let raw_lights: Vec<_> = self.lights.lights.iter().map(|l| l.to_raw()).collect();
+            let staging_buffer =
+                self.context
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Staging"),
+                        contents: bytemuck::cast_slice(&raw_lights),
+                        usage: wgpu::BufferUsage::COPY_SRC,
+                    });
+            encoder.copy_buffer_to_buffer(
+                &staging_buffer,
+                0,
+                &self.lights.buffer,
+                0,
+                std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
+            );
         }
 
         // Update light config
@@ -362,7 +360,8 @@ impl State {
                     );
                 }
             }
-            self.shadow_pass.copy_to_cubemap(&mut encoder, &self.lights.shadow_cubemap.texture);
+            self.shadow_pass
+                .copy_to_cubemap(&mut encoder, &self.lights.shadow_cubemap.texture);
         }
 
         {

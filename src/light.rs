@@ -1,3 +1,5 @@
+use crate::billboard::{Billboard, BillboardId, Billboards};
+use crate::model;
 use crate::prelude::*;
 use crate::shadow;
 use wgpu::util::DeviceExt;
@@ -14,11 +16,25 @@ pub struct Lights {
 impl Lights {
     pub fn new(
         context: &Context,
-        light_bind_group_layout: &wgpu::BindGroupLayout, // TODO store in context?
+        billboards: &mut Billboards,
+        light_material: model::MaterialId,
     ) -> Self {
         let config = LightConfig::new(&context.device);
 
-        let lights = vec![Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0))];
+        let lights: Vec<_> = (1..3)
+            .map(|i| {
+                let position: Vector3 = (i as f32 * 10.0, i as f32 * 10.0, 0.0).into();
+                let billboard = billboards.insert(
+                    &context,
+                    Billboard {
+                        position,
+                        material: light_material,
+                    },
+                );
+                Light::new(position, (1.0, 1.0, 1.0), billboard)
+            })
+            .collect();
+
         let buffer_data: Vec<_> = lights.iter().map(Light::to_raw).collect();
 
         // We'll want to update our lights position, so we use COPY_DST
@@ -35,7 +51,7 @@ impl Lights {
         let bind_group = context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &light_bind_group_layout,
+                layout: &context.light_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -75,14 +91,20 @@ pub struct Light {
     pub position: Vector3,
     pub color: Vector3,
     pub light_type: LightType,
+    pub billboard: BillboardId,
 }
 
 impl Light {
-    pub fn new<P: Into<Vector3>, C: Into<Vector3>>(position: P, color: C) -> Self {
+    pub fn new<P: Into<Vector3>, C: Into<Vector3>>(
+        position: P,
+        color: C,
+        billboard: BillboardId,
+    ) -> Self {
         Light {
             position: position.into(),
             color: color.into(),
             light_type: LightType::Point,
+            billboard,
         }
     }
 

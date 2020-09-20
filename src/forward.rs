@@ -1,6 +1,5 @@
 use crate::camera;
 use crate::geometry::Vertex;
-use crate::light;
 use crate::model;
 use crate::pipeline;
 use crate::prelude::*;
@@ -11,7 +10,6 @@ use wgpu::util::DeviceExt;
 
 pub struct ForwardPass {
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
-    pub light_bind_group_layout: wgpu::BindGroupLayout,
     pub uniform_bind_group_layout: wgpu::BindGroupLayout,
 
     pub uniforms: Uniforms,
@@ -64,53 +62,6 @@ impl ForwardPass {
                         },
                     ],
                     label: Some("texture_bind_group_layout"),
-                });
-
-        let light_bind_group_layout =
-            context
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer {
-                                dynamic: false,
-                                min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<
-                                    light::LightRaw,
-                                >(
-                                )
-                                    as _),
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture {
-                                multisampled: false,
-                                component_type: wgpu::TextureComponentType::Float,
-                                dimension: wgpu::TextureViewDimension::D2,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler { comparison: false },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer {
-                                dynamic: false,
-                                min_binding_size: light::LightConfig::binding_size(),
-                            },
-                            count: None,
-                        },
-                    ],
-                    label: None,
                 });
 
         let uniforms = Uniforms::new();
@@ -169,7 +120,7 @@ impl ForwardPass {
                         &texture_bind_group_layout,
                         &uniform_bind_group_layout,
                         &context.instances_bind_group_layout,
-                        &light_bind_group_layout,
+                        &context.light_bind_group_layout,
                     ],
                 });
 
@@ -199,7 +150,6 @@ impl ForwardPass {
 
         ForwardPass {
             texture_bind_group_layout,
-            light_bind_group_layout,
             uniform_bind_group_layout,
 
             uniforms,
