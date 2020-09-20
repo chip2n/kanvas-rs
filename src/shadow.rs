@@ -25,13 +25,63 @@ pub struct ShadowMapTarget {
     pub bind_group: wgpu::BindGroup,
 }
 
+pub struct ShadowCubemap {
+    pub texture: wgpu::Texture,
+    pub texture_view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
+}
+
+impl ShadowCubemap {
+    pub fn new(context: &Context) -> Self {
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 1024,
+                height: 1024,
+                depth: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: SHADOW_FORMAT,
+            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            label: None,
+        });
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Shadow"),
+            format: None,
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            level_count: None,
+            base_array_layer: 0,
+            array_layer_count: NonZeroU32::new(1),
+        });
+
+        let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
+            ..Default::default()
+        });
+
+        Self {
+            texture,
+            texture_view,
+            sampler,
+        }
+    }
+}
+
 pub struct ShadowPass {
     pub pipeline: wgpu::RenderPipeline,
-    pub sampler: wgpu::Sampler,
     pub uniforms_buffer: wgpu::Buffer,
     pub uniforms_bind_group: wgpu::BindGroup,
-    pub cube_texture: wgpu::Texture,
-    pub cube_texture_view: wgpu::TextureView,
     pub targets: [ShadowMapTarget; 6],
     pub target_bind_group_layout: wgpu::BindGroupLayout,
 }
@@ -109,31 +159,6 @@ impl ShadowPass {
             mipmap_filter: wgpu::FilterMode::Nearest,
             compare: None,
             ..Default::default()
-        });
-
-        let cube_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 1024,
-                height: 1024,
-                depth: 6,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: SHADOW_FORMAT,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: None,
-        });
-
-        let cube_texture_view = cube_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("Shadow"),
-            format: None,
-            dimension: Some(wgpu::TextureViewDimension::Cube),
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            level_count: None,
-            base_array_layer: 0,
-            array_layer_count: NonZeroU32::new(1),
         });
 
         let target_bind_group_layout =
@@ -215,17 +240,14 @@ impl ShadowPass {
 
         Self {
             pipeline,
-            sampler,
             uniforms_buffer,
             uniforms_bind_group,
-            cube_texture,
-            cube_texture_view,
             targets,
             target_bind_group_layout,
         }
     }
 
-    pub fn copy_to_cubemap(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub fn copy_to_cubemap(&self, encoder: &mut wgpu::CommandEncoder, cubemap: &wgpu::Texture) {
         for (i, target) in self.targets.iter().enumerate() {
             encoder.copy_texture_to_texture(
                 wgpu::TextureCopyView {
@@ -234,7 +256,7 @@ impl ShadowPass {
                     origin: wgpu::Origin3d::ZERO,
                 },
                 wgpu::TextureCopyView {
-                    texture: &self.cube_texture,
+                    texture: &cubemap,
                     mip_level: 0,
                     origin: wgpu::Origin3d {
                         x: 0,

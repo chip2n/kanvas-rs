@@ -1,5 +1,75 @@
 use crate::prelude::*;
+use crate::shadow;
 use wgpu::util::DeviceExt;
+
+pub struct Lights {
+    // TODO bundle together to support multiple lights
+    pub light: Light,
+    pub shadow_cubemap: shadow::ShadowCubemap,
+
+    pub config: LightConfig,
+    pub buffer: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl Lights {
+    pub fn new(
+        context: &Context,
+        light_bind_group_layout: &wgpu::BindGroupLayout, // TODO store in context?
+    ) -> Self {
+        let config = LightConfig::new(&context.device);
+
+        let light = Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
+
+        // We'll want to update our lights position, so we use COPY_DST
+        let buffer = context
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Lights"),
+                contents: bytemuck::cast_slice(&[light.to_raw()]),
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            });
+
+        let shadow_cubemap = shadow::ShadowCubemap::new(context);
+
+        let bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &light_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer {
+                            buffer: &buffer,
+                            offset: 0,
+                            size: None,
+                        },
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&shadow_cubemap.texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&shadow_cubemap.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: config.binding_resource(),
+                    },
+                ],
+                label: None,
+            });
+
+        Self {
+            light,
+            shadow_cubemap,
+            config,
+            buffer,
+            bind_group,
+        }
+    }
+}
 
 pub struct Light {
     pub position: Vector3,

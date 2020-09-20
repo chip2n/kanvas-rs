@@ -76,10 +76,7 @@ struct State {
     instances: Vec<model::Instance>,
     obj_model: model::Model,
     billboards: billboard::Billboards,
-    light: light::Light,
-    light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
-    light_config: light::LightConfig,
+    lights: light::Lights,
     light_billboard: billboard::BillboardId,
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
@@ -137,17 +134,6 @@ impl State {
                 label: Some("instances_bind_group"),
             });
 
-        let light = light::Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
-
-        // We'll want to update our lights position, so we use COPY_DST
-        let light_buffer = context
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Lights"),
-                contents: bytemuck::cast_slice(&[light.to_raw()]),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            });
-
         let vertex_descs = [model::ModelVertex::desc()];
 
         let shadow_pass = shadow::ShadowPass::new(
@@ -157,40 +143,6 @@ impl State {
             &vertex_descs,
         );
 
-        let light_config = light::LightConfig::new(&context.device);
-
-        // TODO do some of this in shadow pass?
-        let light_bind_group = context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &forward_pass.light_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &light_buffer,
-                            offset: 0,
-                            size: None,
-                        },
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(
-                            &shadow_pass.cube_texture_view,
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&shadow_pass.sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: light_config.binding_resource(),
-                    },
-                ],
-                label: None,
-            });
-
         let (obj_model, cmds) = model::Model::load(
             &context.device,
             &forward_pass.texture_bind_group_layout,
@@ -198,6 +150,8 @@ impl State {
         )
         .unwrap();
         context.queue.submit(cmds);
+
+        let lights = light::Lights::new(&context, &forward_pass.light_bind_group_layout);
 
         let (bulb_texture, cmd) =
             texture::Texture::load(&context.device, "res/tex/bulb.png", false).unwrap();
@@ -217,7 +171,7 @@ impl State {
         let light_billboard = billboards.insert(
             &context,
             billboard::Billboard {
-                position: light.position,
+                position: lights.light.position,
                 material: light_bulb_material,
             },
         );
@@ -240,10 +194,7 @@ impl State {
             instances,
             obj_model,
             billboards,
-            light,
-            light_buffer,
-            light_bind_group,
-            light_config,
+            lights,
             light_billboard,
             shadow_pass,
             debug_pass,
@@ -337,8 +288,8 @@ impl State {
             .upload_uniforms(&self.context.device, &mut encoder);
 
         // Update the light
-        let old_position = self.light.position;
-        self.light.position = cgmath::Quaternion::from_axis_angle(
+        let old_position = self.lights.light.position;
+        self.lights.light.position = cgmath::Quaternion::from_axis_angle(
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * old_position;
@@ -347,26 +298,26 @@ impl State {
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Staging"),
-                    contents: bytemuck::cast_slice(&[self.light.to_raw()]),
+                    contents: bytemuck::cast_slice(&[self.lights.light.to_raw()]),
                     usage: wgpu::BufferUsage::COPY_SRC,
                 });
         encoder.copy_buffer_to_buffer(
             &staging_buffer,
             0,
-            &self.light_buffer,
+            &self.lights.buffer,
             0,
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
         if let Some(billboard) = self.billboards.get(self.light_billboard) {
-            billboard.position = self.light.position;
+            billboard.position = self.lights.light.position;
         }
 
         // Update light config
-        self.light_config.shadows_enabled = self.debug_ui.shadows_enabled;
-        self.light_config.upload(&self.context.queue);
+        self.lights.config.shadows_enabled = self.debug_ui.shadows_enabled;
+        self.lights.config.upload(&self.context.queue);
 
         self.shadow_pass
-            .update_light(&self.context.queue, &self.light);
+            .update_light(&self.context.queue, &self.lights.light);
 
         self.context.queue.submit(iter::once(encoder.finish()));
 
@@ -400,7 +351,7 @@ impl State {
         });
 
         // render shadow maps
-        if self.light_config.shadows_enabled {
+        if self.lights.config.shadows_enabled {
             for face_index in 0..6 {
                 // shadow pass
                 let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
@@ -411,7 +362,7 @@ impl State {
                     );
                 }
             }
-            self.shadow_pass.copy_to_cubemap(&mut encoder);
+            self.shadow_pass.copy_to_cubemap(&mut encoder, &self.lights.shadow_cubemap.texture);
         }
 
         {
@@ -424,7 +375,7 @@ impl State {
                 0..self.instances.len() as u32,
                 &self.forward_pass.uniform_bind_group,
                 &self.instances_bind_group,
-                &self.light_bind_group,
+                &self.lights.bind_group,
             );
 
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);

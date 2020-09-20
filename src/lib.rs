@@ -14,6 +14,7 @@ pub mod ui;
 
 pub mod prelude {
     pub use crate::math::*;
+    pub use crate::Context;
 }
 
 use model::{Material, MaterialId};
