@@ -256,7 +256,7 @@ impl State {
                 billboards.insert(
                     &kanvas,
                     billboard::Billboard {
-                        position: (x as f32 * 2.0 - 50.0, 10.0, y as f32 * 2.0 - 50.0).into(),
+                        position: (x as f32 * 1.0 - 50.0, 10.0, y as f32 * 1.0 - 50.0).into(),
                         material: light_bulb_material,
                     },
                 );
