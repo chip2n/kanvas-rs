@@ -3,6 +3,7 @@ use crate::geometry::Vertex;
 use crate::light;
 use crate::model;
 use crate::pipeline;
+use crate::prelude::*;
 use crate::texture;
 use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
@@ -271,7 +272,7 @@ impl ForwardPass {
 #[derive(Copy, Clone)]
 pub struct Uniforms {
     pub view_position: cgmath::Vector4<f32>,
-    pub view_proj: cgmath::Matrix4<f32>,
+    pub view_proj: Matrix4,
 }
 
 unsafe impl bytemuck::Pod for Uniforms {}
@@ -279,11 +280,9 @@ unsafe impl bytemuck::Zeroable for Uniforms {}
 
 impl Uniforms {
     pub fn new() -> Self {
-        use cgmath::SquareMatrix;
-
         Self {
             view_position: cgmath::Zero::zero(),
-            view_proj: cgmath::Matrix4::identity(),
+            view_proj: Matrix4::identity(),
         }
     }
 

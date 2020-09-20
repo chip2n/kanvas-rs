@@ -1,11 +1,11 @@
-use cgmath::*;
+use crate::prelude::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::dpi::LogicalPosition;
 use winit::event::*;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+pub const OPENGL_TO_WGPU_MATRIX: Matrix4 = Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
     0.0, 0.0, 0.5, 0.0,
@@ -13,13 +13,13 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 );
 
 pub struct Camera {
-    pub position: Point3<f32>,
+    pub position: Point3,
     yaw: Rad<f32>,
     pitch: Rad<f32>,
 }
 
 impl Camera {
-    pub fn new<V: Into<Point3<f32>>, Y: Into<Rad<f32>>, P: Into<Rad<f32>>>(
+    pub fn new<V: Into<Point3>, Y: Into<Rad<f32>>, P: Into<Rad<f32>>>(
         position: V,
         yaw: Y,
         pitch: P,
@@ -31,7 +31,7 @@ impl Camera {
         }
     }
 
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
+    pub fn calc_matrix(&self) -> Matrix4 {
         Matrix4::look_at_dir(
             self.position,
             Vector3::new(self.yaw.0.cos(), self.pitch.0.sin(), self.yaw.0.sin()).normalize(),
@@ -61,7 +61,7 @@ impl PerspectiveProjection {
         self.aspect = width as f32 / height as f32;
     }
 
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
+    pub fn calc_matrix(&self) -> Matrix4 {
         OPENGL_TO_WGPU_MATRIX * cgmath::perspective(self.fovy, self.aspect, self.znear, self.zfar)
     }
 }
@@ -87,7 +87,7 @@ impl OrthographicProjection {
         }
     }
 
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
+    pub fn calc_matrix(&self) -> Matrix4 {
         OPENGL_TO_WGPU_MATRIX
             * cgmath::ortho(
                 self.left,

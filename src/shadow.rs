@@ -351,79 +351,79 @@ impl<'a> ShadowPassRenderData<'a> {
     }
 }
 
-pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Matrix4<f32>> {
+pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<Matrix4> {
     let light_proj = create_proj_mat(&light::LightType::Point);
     let transforms = vec![
         /*
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, -1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         */
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(1.0, 0.0, 0.0),
                 cgmath::Vector3::unit_y(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(-1.0, 0.0, 0.0),
                 cgmath::Vector3::unit_y(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
                 cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, -1.0, 0.0),
                 -cgmath::Vector3::unit_z(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 0.0, -1.0),
                 cgmath::Vector3::unit_y(),
             ),
         light_proj
-            * cgmath::Matrix4::look_at(
+            * Matrix4::look_at(
                 light_pos,
                 light_pos + cgmath::Vector3::new(0.0, 0.0, 1.0),
                 cgmath::Vector3::unit_y(),
@@ -432,7 +432,7 @@ pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<cgmath::Mat
     transforms
 }
 
-fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
+fn create_proj_mat(light_type: &light::LightType) -> Matrix4 {
     match light_type {
         light::LightType::Directional => {
             camera::OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0).calc_matrix()
@@ -447,7 +447,7 @@ fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ShadowUniforms {
-    pub light_proj: cgmath::Matrix4<f32>,
+    pub light_proj: Matrix4,
     pub light_position: Vector3,
 }
 

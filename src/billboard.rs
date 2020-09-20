@@ -88,7 +88,7 @@ impl Billboards {
         for (id, billboard) in self.billboards.iter() {
             // From: https://swiftcoder.wordpress.com/2008/11/25/constructing-a-billboard-matrix/
             // Transpose the 3x3 rotation matrix (cancels out view matrix rotation)
-            let billboard_transform = cgmath::Matrix4::new(
+            let billboard_transform = Matrix4::new(
                 view_mat.x.x,
                 view_mat.y.x,
                 view_mat.z.x,

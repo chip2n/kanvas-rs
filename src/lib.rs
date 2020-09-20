@@ -13,8 +13,7 @@ pub mod texture;
 pub mod ui;
 
 pub mod prelude {
-    use crate::math;
-    pub use math::Vector3;
+    pub use crate::math::*;
 }
 
 use model::{Material, MaterialId};

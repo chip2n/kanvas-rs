@@ -396,8 +396,8 @@ pub struct Instance {
 impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
-            model: cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation),
+            model: Matrix4::from_translation(self.position)
+                * Matrix4::from(self.rotation),
         }
     }
 }
@@ -405,7 +405,7 @@ impl Instance {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct InstanceRaw {
-    pub model: cgmath::Matrix4<f32>,
+    pub model: Matrix4,
 }
 
 unsafe impl bytemuck::Pod for InstanceRaw {}

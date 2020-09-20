@@ -2,8 +2,6 @@ use kanvas::prelude::*;
 use kanvas::*;
 use light::DrawLight;
 use model::DrawModel;
-
-use cgmath::prelude::*;
 use futures::executor::block_on;
 use geometry::Vertex;
 use std::iter;
