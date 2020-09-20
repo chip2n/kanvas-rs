@@ -1,4 +1,5 @@
 use crate::geometry::Vertex;
+use crate::prelude::*;
 use crate::texture;
 use std::ops::Range;
 use std::path::Path;
@@ -336,11 +337,11 @@ impl Model {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct ModelVertex {
-    position: cgmath::Vector3<f32>,
+    position: Vector3,
     tex_coords: cgmath::Vector2<f32>,
-    normal: cgmath::Vector3<f32>,
-    tangent: cgmath::Vector3<f32>,
-    bitangent: cgmath::Vector3<f32>,
+    normal: Vector3,
+    tangent: Vector3,
+    bitangent: Vector3,
 }
 
 unsafe impl bytemuck::Pod for ModelVertex {}
@@ -388,7 +389,7 @@ impl Vertex for ModelVertex {
 }
 
 pub struct Instance {
-    pub position: cgmath::Vector3<f32>,
+    pub position: Vector3,
     pub rotation: cgmath::Quaternion<f32>,
 }
 

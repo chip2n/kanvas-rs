@@ -4,6 +4,7 @@ use crate::geometry::Vertex;
 use crate::model;
 use crate::model::MaterialId;
 use crate::pipeline;
+use crate::prelude::*;
 use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
 use std::collections::HashMap;
@@ -13,7 +14,7 @@ const MAX_BILLBOARDS: u64 = 10000;
 pub type BillboardId = usize;
 
 pub struct Billboard {
-    pub position: cgmath::Vector3<f32>,
+    pub position: Vector3,
     pub material: MaterialId,
 }
 

@@ -4,12 +4,18 @@ pub mod debug;
 pub mod forward;
 pub mod geometry;
 pub mod light;
+pub mod math;
 pub mod model;
 pub mod pipeline;
 pub mod shader;
 pub mod shadow;
 pub mod texture;
 pub mod ui;
+
+pub mod prelude {
+    use crate::math;
+    pub use math::Vector3;
+}
 
 use model::{Material, MaterialId};
 use std::collections::HashMap;

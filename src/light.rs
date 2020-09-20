@@ -1,18 +1,16 @@
 use crate::model;
+use crate::prelude::*;
 use std::ops::Range;
 use wgpu::util::DeviceExt;
 
 pub struct Light {
-    pub position: cgmath::Vector3<f32>,
-    pub color: cgmath::Vector3<f32>,
+    pub position: Vector3,
+    pub color: Vector3,
     pub light_type: LightType,
 }
 
 impl Light {
-    pub fn new<P: Into<cgmath::Vector3<f32>>, C: Into<cgmath::Vector3<f32>>>(
-        position: P,
-        color: C,
-    ) -> Self {
+    pub fn new<P: Into<Vector3>, C: Into<Vector3>>(position: P, color: C) -> Self {
         Light {
             position: position.into(),
             color: color.into(),
@@ -32,10 +30,10 @@ impl Light {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LightRaw {
-    pub position: cgmath::Vector3<f32>,
+    pub position: Vector3,
     // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
     _padding: u32,
-    pub color: cgmath::Vector3<f32>,
+    pub color: Vector3,
 }
 
 #[repr(C)]

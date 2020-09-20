@@ -2,6 +2,7 @@ use crate::camera;
 use crate::light;
 use crate::model;
 use crate::pipeline;
+use crate::prelude::*;
 use crate::{compile_frag, compile_vertex};
 use std::mem;
 use std::num::{NonZeroU32, NonZeroU64};
@@ -447,7 +448,7 @@ fn create_proj_mat(light_type: &light::LightType) -> cgmath::Matrix4<f32> {
 #[derive(Copy, Clone)]
 pub struct ShadowUniforms {
     pub light_proj: cgmath::Matrix4<f32>,
-    pub light_position: cgmath::Vector3<f32>,
+    pub light_position: Vector3,
 }
 
 unsafe impl bytemuck::Pod for ShadowUniforms {}

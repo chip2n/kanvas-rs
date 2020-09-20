@@ -1,3 +1,4 @@
+use kanvas::prelude::*;
 use kanvas::*;
 use light::DrawLight;
 use model::DrawModel;
@@ -105,15 +106,12 @@ impl State {
         let forward_pass = forward::ForwardPass::new(&mut kanvas);
 
         let instances = vec![model::Instance {
-            position: cgmath::Vector3 {
+            position: Vector3 {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
             },
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            ),
+            rotation: cgmath::Quaternion::from_axis_angle(Vector3::unit_z(), cgmath::Deg(0.0)),
         }];
         let instance_data = instances
             .iter()

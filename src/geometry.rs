@@ -1,21 +1,22 @@
 use crate::model;
+use crate::prelude::*;
 use wgpu::util::DeviceExt;
 
 pub const PLANE_VERTICES: [SimpleVertex; 4] = [
     SimpleVertex {
-        position: cgmath::Vector3::new(-1.0, -1.0, 0.0),
+        position: Vector3::new(-1.0, -1.0, 0.0),
         tex_coords: cgmath::Vector2::new(0.0, 1.0),
     },
     SimpleVertex {
-        position: cgmath::Vector3::new(1.0, -1.0, 0.0),
+        position: Vector3::new(1.0, -1.0, 0.0),
         tex_coords: cgmath::Vector2::new(1.0, 1.0),
     },
     SimpleVertex {
-        position: cgmath::Vector3::new(1.0, 1.0, 0.0),
+        position: Vector3::new(1.0, 1.0, 0.0),
         tex_coords: cgmath::Vector2::new(1.0, 0.0),
     },
     SimpleVertex {
-        position: cgmath::Vector3::new(-1.0, 1.0, 0.0),
+        position: Vector3::new(-1.0, 1.0, 0.0),
         tex_coords: cgmath::Vector2::new(0.0, 0.0),
     },
 ];
@@ -68,7 +69,7 @@ pub trait Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct SimpleVertex {
-    position: cgmath::Vector3<f32>,
+    position: Vector3,
     tex_coords: cgmath::Vector2<f32>,
 }
 
