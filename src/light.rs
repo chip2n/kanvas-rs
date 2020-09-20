@@ -3,8 +3,7 @@ use crate::shadow;
 use wgpu::util::DeviceExt;
 
 pub struct Lights {
-    // TODO bundle together to support multiple lights
-    pub light: Light,
+    pub lights: Vec<Light>,
     pub shadow_cubemap: shadow::ShadowCubemap,
 
     pub config: LightConfig,
@@ -19,14 +18,15 @@ impl Lights {
     ) -> Self {
         let config = LightConfig::new(&context.device);
 
-        let light = Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0));
+        let lights = vec![Light::new((20.0, 20.0, 0.0), (1.0, 1.0, 1.0))];
+        let buffer_data: Vec<_> = lights.iter().map(Light::to_raw).collect();
 
         // We'll want to update our lights position, so we use COPY_DST
         let buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Lights"),
-                contents: bytemuck::cast_slice(&[light.to_raw()]),
+                contents: bytemuck::cast_slice(&buffer_data),
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
@@ -62,7 +62,7 @@ impl Lights {
             });
 
         Self {
-            light,
+            lights,
             shadow_cubemap,
             config,
             buffer,

@@ -171,7 +171,7 @@ impl State {
         let light_billboard = billboards.insert(
             &context,
             billboard::Billboard {
-                position: lights.light.position,
+                position: lights.lights[0].position,
                 material: light_bulb_material,
             },
         );
@@ -288,8 +288,8 @@ impl State {
             .upload_uniforms(&self.context.device, &mut encoder);
 
         // Update the light
-        let old_position = self.lights.light.position;
-        self.lights.light.position = cgmath::Quaternion::from_axis_angle(
+        let old_position = self.lights.lights[0].position;
+        self.lights.lights[0].position = cgmath::Quaternion::from_axis_angle(
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * old_position;
@@ -298,7 +298,7 @@ impl State {
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Staging"),
-                    contents: bytemuck::cast_slice(&[self.lights.light.to_raw()]),
+                    contents: bytemuck::cast_slice(&[self.lights.lights[0].to_raw()]),
                     usage: wgpu::BufferUsage::COPY_SRC,
                 });
         encoder.copy_buffer_to_buffer(
@@ -309,7 +309,7 @@ impl State {
             std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
         );
         if let Some(billboard) = self.billboards.get(self.light_billboard) {
-            billboard.position = self.lights.light.position;
+            billboard.position = self.lights.lights[0].position;
         }
 
         // Update light config
@@ -317,7 +317,7 @@ impl State {
         self.lights.config.upload(&self.context.queue);
 
         self.shadow_pass
-            .update_light(&self.context.queue, &self.lights.light);
+            .update_light(&self.context.queue, &self.lights.lights[0]);
 
         self.context.queue.submit(iter::once(encoder.finish()));
 
