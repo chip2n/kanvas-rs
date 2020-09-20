@@ -10,7 +10,6 @@ use wgpu::util::DeviceExt;
 
 pub struct ForwardPass {
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
-    pub instances_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
     pub uniform_bind_group_layout: wgpu::BindGroupLayout,
 
@@ -113,23 +112,6 @@ impl ForwardPass {
                     label: None,
                 });
 
-        let instances_bind_group_layout =
-            kanvas
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            min_binding_size: None,
-                            readonly: true,
-                        },
-                        count: None,
-                    }],
-                    label: Some("instances_bind_group_layout"),
-                });
-
         let uniforms = Uniforms::new();
         let uniform_buffer = kanvas
             .device
@@ -185,7 +167,7 @@ impl ForwardPass {
                     bind_group_layouts: &[
                         &texture_bind_group_layout,
                         &uniform_bind_group_layout,
-                        &instances_bind_group_layout,
+                        &kanvas.instances_bind_group_layout,
                         &light_bind_group_layout,
                     ],
                 });
@@ -212,12 +194,10 @@ impl ForwardPass {
             kanvas,
             &texture_bind_group_layout,
             &uniform_bind_group_layout,
-            &instances_bind_group_layout,
         );
 
         ForwardPass {
             texture_bind_group_layout,
-            instances_bind_group_layout,
             light_bind_group_layout,
             uniform_bind_group_layout,
 

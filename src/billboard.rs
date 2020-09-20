@@ -2,113 +2,142 @@ use crate::camera;
 use crate::geometry;
 use crate::geometry::Vertex;
 use crate::model;
+use crate::model::MaterialId;
 use crate::pipeline;
 use crate::Kanvas;
 use crate::{compile_frag, compile_vertex};
-use cgmath::prelude::*;
-use wgpu::util::DeviceExt;
-use crate::model::MaterialId;
+use std::collections::HashMap;
+
+const MAX_BILLBOARDS: u64 = 100;
+
+pub type BillboardId = usize;
 
 pub struct Billboard {
-    instance_buffer: wgpu::Buffer,
-    pub instance_bind_group: wgpu::BindGroup,
-    position: cgmath::Vector3<f32>,
+    pub position: cgmath::Vector3<f32>,
     pub material: MaterialId,
+}
+
+struct BillboardData {
+    num_instances: u32,
+    instance_buffer: wgpu::Buffer,
+    instance_bind_group: wgpu::BindGroup,
+}
+
+pub struct Billboards {
+    next_id: usize,
+    billboards: HashMap<BillboardId, Billboard>,
+    instances: HashMap<MaterialId, BillboardData>,
     plane: geometry::Plane,
 }
 
-impl Billboard {
-    pub fn new(
-        kanvas: &Kanvas,
-        position: cgmath::Vector3<f32>,
-        material: MaterialId,
-        instances_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let instances = vec![model::Instance {
-            position,
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            ),
-        }];
-        let instance_data = instances
-            .iter()
-            .map(model::Instance::to_raw)
-            .collect::<Vec<_>>();
-        let instance_buffer = kanvas
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Instances"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
-            });
-
-        let instance_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &instances_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &instance_buffer,
-                    offset: 0,
-                    size: None,
-                },
-            }],
-            label: Some("instances_bind_group"),
-        });
-
-        Billboard {
-            instance_buffer,
-            instance_bind_group,
-            position,
-            material,
-            plane: geometry::Plane::new(&kanvas.device),
+impl Billboards {
+    pub fn new(kanvas: &Kanvas) -> Self {
+        let plane = geometry::Plane::new(&kanvas.device);
+        Billboards {
+            next_id: 0,
+            billboards: HashMap::new(),
+            instances: HashMap::new(),
+            plane,
         }
     }
 
-    pub fn update(&mut self, kanvas: &Kanvas, camera: &camera::Camera) {
+    pub fn insert(&mut self, kanvas: &Kanvas, billboard: Billboard) -> BillboardId {
+        let data = self.instances.entry(billboard.material).or_insert_with(|| {
+            let instance_buffer = kanvas.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("billboard_instances"),
+                size: MAX_BILLBOARDS * std::mem::size_of::<model::InstanceRaw>() as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
+            });
+
+            let instance_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &kanvas.instances_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &instance_buffer,
+                        offset: 0,
+                        size: None,
+                    },
+                }],
+                label: Some("instances_bind_group"),
+            });
+            BillboardData {
+                num_instances: 0,
+                instance_buffer,
+                instance_bind_group,
+            }
+        });
+
+        let id = self.next_id;
+        self.next_id += 1;
+
+        self.billboards.insert(id, billboard);
+        data.num_instances += 1;
+
+        id
+    }
+
+    pub fn upload(&self, kanvas: &Kanvas, camera: &camera::Camera) {
+        let instance_size = std::mem::size_of::<model::InstanceRaw>();
+
         // TODO don't recalculate view matrix
         let view_mat = camera.calc_matrix();
 
-        // From: https://swiftcoder.wordpress.com/2008/11/25/constructing-a-billboard-matrix/
-        // Transpose the 3x3 rotation matrix (cancels out view matrix rotation)
-        let billboard_transform = cgmath::Matrix4::new(
-            view_mat.x.x,
-            view_mat.y.x,
-            view_mat.z.x,
-            0.0,
-            view_mat.x.y,
-            view_mat.y.y,
-            view_mat.z.y,
-            0.0,
-            view_mat.x.z,
-            view_mat.y.z,
-            view_mat.z.z,
-            0.0,
-            self.position.x,
-            self.position.y,
-            self.position.z,
-            1.0,
-        );
-        let instance = model::InstanceRaw {
-            model: billboard_transform,
-        };
-        kanvas
-            .queue
-            .write_buffer(&self.instance_buffer, 0, bytemuck::bytes_of(&instance));
+        for (id, billboard) in self.billboards.iter() {
+            // From: https://swiftcoder.wordpress.com/2008/11/25/constructing-a-billboard-matrix/
+            // Transpose the 3x3 rotation matrix (cancels out view matrix rotation)
+            let billboard_transform = cgmath::Matrix4::new(
+                view_mat.x.x,
+                view_mat.y.x,
+                view_mat.z.x,
+                0.0,
+                view_mat.x.y,
+                view_mat.y.y,
+                view_mat.z.y,
+                0.0,
+                view_mat.x.z,
+                view_mat.y.z,
+                view_mat.z.z,
+                0.0,
+                billboard.position.x,
+                billboard.position.y,
+                billboard.position.z,
+                1.0,
+            );
+            let instance = model::InstanceRaw {
+                model: billboard_transform,
+            };
+
+            let buffer = &self.instances[&billboard.material].instance_buffer;
+            kanvas.queue.write_buffer(
+                buffer,
+                (id * instance_size) as u64,
+                bytemuck::bytes_of(&instance),
+            );
+        }
     }
 
     pub fn render<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        material: &'a model::Material,
+        materials: &'a crate::Materials,
         uniforms_bind_group: &'a wgpu::BindGroup,
     ) {
-        self.plane.render(
-            render_pass,
-            material,
-            uniforms_bind_group,
-            &self.instance_bind_group,
-        );
+        render_pass.set_vertex_buffer(0, self.plane.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.plane.index_buffer.slice(..));
+        render_pass.set_bind_group(1, &uniforms_bind_group, &[]);
+
+        for (material_id, data) in self.instances.iter() {
+            let material = materials.get(*material_id);
+            render_pass.set_bind_group(0, &material.bind_group, &[]);
+            render_pass.set_bind_group(2, &data.instance_bind_group, &[]);
+            render_pass.draw_indexed(
+                0..geometry::PLANE_INDICES.len() as u32,
+                0,
+                0..data.num_instances,
+            );
+        }
     }
 }
 
@@ -116,7 +145,6 @@ pub fn create_pipeline(
     kanvas: &mut Kanvas,
     texture_bind_group_layout: &wgpu::BindGroupLayout,
     uniform_bind_group_layout: &wgpu::BindGroupLayout,
-    instances_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let layout = kanvas
         .device
@@ -126,7 +154,7 @@ pub fn create_pipeline(
             bind_group_layouts: &[
                 &texture_bind_group_layout,
                 &uniform_bind_group_layout,
-                &instances_bind_group_layout,
+                &kanvas.instances_bind_group_layout,
             ],
         });
 

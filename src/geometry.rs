@@ -23,8 +23,8 @@ pub const PLANE_VERTICES: [SimpleVertex; 4] = [
 pub const PLANE_INDICES: &[u32] = &[0, 1, 2, 0, 2, 3];
 
 pub struct Plane {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
 }
 
 impl Plane {

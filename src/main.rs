@@ -78,7 +78,7 @@ struct State {
     instances_bind_group: wgpu::BindGroup,
     instances: Vec<model::Instance>,
     obj_model: model::Model,
-    billboards: Vec<billboard::Billboard>,
+    billboards: billboard::Billboards,
     light_model: model::Model,
     light: light::Light,
     light_buffer: wgpu::Buffer,
@@ -128,7 +128,7 @@ impl State {
             });
 
         let instances_bind_group = kanvas.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &forward_pass.instances_bind_group_layout,
+            layout: &kanvas.instances_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer {
@@ -156,7 +156,7 @@ impl State {
         let shadow_pass = shadow::ShadowPass::new(
             &kanvas.device,
             &mut kanvas.shader_compiler,
-            &forward_pass.instances_bind_group_layout,
+            &kanvas.instances_bind_group_layout,
             &vertex_descs,
         );
 
@@ -249,20 +249,22 @@ impl State {
             &forward_pass.texture_bind_group_layout,
         );
 
-        let billboards = vec![
-            billboard::Billboard::new(
-                &kanvas,
-                (0.0, 10.0, 0.0).into(),
-                light_bulb_material,
-                &forward_pass.instances_bind_group_layout,
-            ),
-            billboard::Billboard::new(
-                &kanvas,
-                (0.0, 12.0, 0.0).into(),
-                light_bulb_material,
-                &forward_pass.instances_bind_group_layout,
-            ),
-        ];
+        let mut billboards = billboard::Billboards::new(&kanvas);
+
+        billboards.insert(
+            &kanvas,
+            billboard::Billboard {
+                position: (0.0, 10.0, 0.0).into(),
+                material: light_bulb_material,
+            },
+        );
+        billboards.insert(
+            &kanvas,
+            billboard::Billboard {
+                position: (0.0, 15.0, 0.0).into(),
+                material: light_bulb_material,
+            },
+        );
 
         let debug_pass = debug::DebugPass::new(
             &kanvas.device,
@@ -410,10 +412,8 @@ impl State {
 
         self.kanvas.queue.submit(iter::once(encoder.finish()));
 
-        // Update billboard
-        for billboard in self.billboards.iter_mut() {
-            billboard.update(&self.kanvas, &self.camera);
-        }
+        // Update billboards
+        self.billboards.upload(&self.kanvas, &self.camera);
 
         // Update ui
         self.debug_ui.camera_pos = self.camera.position;
@@ -470,14 +470,11 @@ impl State {
             );
 
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
-            for billboard in &self.billboards {
-                let material = &self.kanvas.materials.get(billboard.material);
-                billboard.render(
-                    &mut render_pass,
-                    material,
-                    &self.forward_pass.uniform_bind_group,
-                );
-            }
+            self.billboards.render(
+                &mut render_pass,
+                &self.kanvas.materials,
+                &self.forward_pass.uniform_bind_group,
+            );
 
             render_pass.set_pipeline(&self.light_render_pipeline);
 

@@ -17,7 +17,7 @@ use winit::window::Window;
 
 #[derive(Default)]
 pub struct Materials {
-    next_id: u32,
+    next_id: MaterialId,
     materials: HashMap<MaterialId, Material>,
 }
 
@@ -43,6 +43,7 @@ pub struct Kanvas {
     pub swap_chain: wgpu::SwapChain,
     pub shader_compiler: shaderc::Compiler,
     pub materials: Materials,
+    pub instances_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Kanvas {
@@ -85,6 +86,21 @@ impl Kanvas {
 
         let materials = Materials::default();
 
+        let instances_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::StorageBuffer {
+                        dynamic: false,
+                        min_binding_size: None,
+                        readonly: true,
+                    },
+                    count: None,
+                }],
+                label: Some("instances_bind_group_layout"),
+            });
+
         Kanvas {
             window,
             surface,
@@ -94,6 +110,7 @@ impl Kanvas {
             swap_chain,
             shader_compiler,
             materials,
+            instances_bind_group_layout,
         }
     }
 
@@ -130,10 +147,9 @@ impl Kanvas {
         ))
     }
 
-    pub fn get_material(
-        &self,
-        id: MaterialId,
-    ) -> &Material {
+    pub fn get_material(&self, id: MaterialId) -> &Material {
         &self.materials.get(id)
     }
+
+    pub fn create_billboard(&mut self) {}
 }
