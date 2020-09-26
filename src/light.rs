@@ -21,9 +21,9 @@ impl Lights {
     ) -> Self {
         let config = LightConfig::new(&context.device);
 
-        let lights: Vec<_> = (1..3)
-            .map(|i| {
-                let position: Vector3 = (i as f32 * 10.0, i as f32 * 10.0, 0.0).into();
+        let lights = vec![
+            {
+                let position: Vector3 = (10.0, 10.0, 0.0).into();
                 let billboard = billboards.insert(
                     &context,
                     Billboard {
@@ -32,8 +32,19 @@ impl Lights {
                     },
                 );
                 Light::new(position, (1.0, 1.0, 1.0), billboard)
-            })
-            .collect();
+            },
+            {
+                let position: Vector3 = (-15.0, 12.0, 8.0).into();
+                let billboard = billboards.insert(
+                    &context,
+                    Billboard {
+                        position,
+                        material: light_material,
+                    },
+                );
+                Light::new(position, (1.0, 1.0, 1.0), billboard)
+            }
+        ];
 
         let buffer_data: Vec<_> = lights.iter().map(Light::to_raw).collect();
 
