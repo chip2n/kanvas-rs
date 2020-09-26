@@ -3,11 +3,14 @@
 // We do all light calculations in tangent space to avoid having to do matrix multiplications
 // for every fragment (in order to convert normal sampled from normal map into world space).
 
+// If you change this, make sure the location qualifiers are correct
+const int MAX_LIGHTS = 2;
+
 layout(location=0) in vec3 v_position;       // tangent space
-layout(location=1) in vec3 v_light_position; // tangent space
-layout(location=2) in vec3 v_view_position;  // tangent space
-layout(location=3) in vec2 v_tex_coords;
-layout(location=4) in vec3 v_position_world_space;
+layout(location=1) in vec3 v_light_positions[MAX_LIGHTS]; // tangent space
+layout(location=3) in vec3 v_view_position;  // tangent space
+layout(location=4) in vec2 v_tex_coords;
+layout(location=5) in vec3 v_position_world_space;
 
 layout(location=0) out vec4 f_color;
 
@@ -15,9 +18,10 @@ layout(set = 0, binding = 0) uniform texture2D t_diffuse;
 layout(set = 0, binding = 1) uniform sampler s_diffuse;
 layout(set = 0, binding = 2) uniform texture2D t_normal;
 layout(set = 0, binding = 3) uniform sampler s_normal;
+
 layout(set = 3, binding = 0) uniform Light {
-  vec3 light_position;
-  vec3 light_color;
+  vec3 light_positions[MAX_LIGHTS];
+  vec3 light_colors[MAX_LIGHTS];
 };
 layout(set = 3, binding = 1) uniform textureCube shadow_tex;
 layout(set = 3, binding = 2) uniform sampler shadow_map;
@@ -37,7 +41,7 @@ vec3 sample_offset_directions[20] = vec3[](
    vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
 );
 
-float calculate_shadow() {
+float calculate_shadow(vec3 light_position) {
   if (!shadows_enabled) {
     return 0.0;
   }
@@ -70,14 +74,14 @@ float calculate_shadow() {
   return shadow;
 }
 
-void main() {
+vec3 calculate_light(vec3 light_position, vec3 light_position_tangent_space, vec3 light_color, bool shadows) {
   // Obtain normal from the normal map
   vec4 object_normal = texture(sampler2D(t_normal, s_normal), v_tex_coords);
 
   // Normals are stored in ranges [0..1], but we need them in [-1, 1]
   vec3 normal = normalize(object_normal.rgb * 2.0 - 1.0);
   
-  vec3 light_dir = normalize(v_light_position - v_position);
+  vec3 light_dir = normalize(light_position_tangent_space - v_position);
 
   float diffuse_strength = max(dot(normal, light_dir), 0.0);
   vec3 diffuse_color = light_color * diffuse_strength;
@@ -95,9 +99,24 @@ void main() {
   vec3 ambient_color = light_color * ambient_strength;
 
   // calculate shadow
-  float shadow = calculate_shadow();
+  float shadow = 0.0;
+  if (shadows) {
+    shadow = calculate_shadow(light_position);
+  }
 
-  vec3 result = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
+  return (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
+}
+
+void main() {
+  vec3 result = vec3(0, 0, 0);
+
+  for (int i = 0; i < MAX_LIGHTS; i++) {
+    vec3 light_position = light_positions[i];
+    vec3 light_position_tangent_space = v_light_positions[i];
+    vec3 light_color = light_colors[i];
+
+    result += calculate_light(light_position, light_position_tangent_space, light_color, i == 0);
+  }
   
-  f_color = vec4(result, object_color.a);
+  f_color = vec4(result, 1.0);
 }

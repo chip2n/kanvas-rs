@@ -4,6 +4,8 @@ use crate::prelude::*;
 use crate::shadow;
 use wgpu::util::DeviceExt;
 
+const MAX_LIGHTS: usize = 2;
+
 pub struct Lights {
     pub lights: Vec<Light>,
     pub shadow_cubemap: shadow::ShadowCubemap,
@@ -23,7 +25,7 @@ impl Lights {
 
         let lights = vec![
             {
-                let position: Vector3 = (10.0, 10.0, 0.0).into();
+                let position: Vector3 = (-15.0, 12.0, 8.0).into();
                 let billboard = billboards.insert(
                     &context,
                     Billboard {
@@ -34,7 +36,7 @@ impl Lights {
                 Light::new(position, (1.0, 1.0, 1.0), billboard)
             },
             {
-                let position: Vector3 = (-15.0, 12.0, 8.0).into();
+                let position: Vector3 = (10.0, 10.0, 0.0).into();
                 let billboard = billboards.insert(
                     &context,
                     Billboard {
@@ -43,17 +45,17 @@ impl Lights {
                     },
                 );
                 Light::new(position, (1.0, 1.0, 1.0), billboard)
-            }
+            },
         ];
 
-        let buffer_data: Vec<_> = lights.iter().map(Light::to_raw).collect();
+        let buffer_data = Self::map_raw(&lights);
 
         // We'll want to update our lights position, so we use COPY_DST
         let buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Lights"),
-                contents: bytemuck::cast_slice(&buffer_data),
+                contents: bytemuck::cast_slice(&[buffer_data]),
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
@@ -96,6 +98,26 @@ impl Lights {
             bind_group,
         }
     }
+
+    pub fn to_raw(&self) -> LightsRaw {
+        Self::map_raw(&self.lights)
+    }
+
+    fn map_raw(lights: &Vec<Light>) -> LightsRaw {
+        let mut positions = [Vector4::zero(); MAX_LIGHTS];
+        let mut colors = [Vector4::zero(); MAX_LIGHTS];
+
+        for i in 0..MAX_LIGHTS {
+            let light = &lights[i];
+            positions[i] = light.position.extend(0.0);
+            colors[i] = light.color.extend(0.0);
+        }
+
+        LightsRaw {
+            positions,
+            colors,
+        }
+    }
 }
 
 pub struct Light {
@@ -118,23 +140,14 @@ impl Light {
             billboard,
         }
     }
-
-    pub fn to_raw(&self) -> LightRaw {
-        LightRaw {
-            position: self.position,
-            _padding: 0,
-            color: self.color,
-        }
-    }
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct LightRaw {
-    pub position: Vector3,
-    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
-    _padding: u32,
-    pub color: Vector3,
+pub struct LightsRaw {
+    // We store these as Vector4 because vectors require 16 byte alignment
+    pub positions: [Vector4; MAX_LIGHTS],
+    pub colors: [Vector4; MAX_LIGHTS],
 }
 
 #[repr(C)]
@@ -199,5 +212,5 @@ pub enum LightType {
     Point,
 }
 
-unsafe impl bytemuck::Zeroable for LightRaw {}
-unsafe impl bytemuck::Pod for LightRaw {}
+unsafe impl bytemuck::Zeroable for LightsRaw {}
+unsafe impl bytemuck::Pod for LightsRaw {}

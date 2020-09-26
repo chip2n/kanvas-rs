@@ -292,13 +292,13 @@ impl State {
                 }
             }
 
-            let raw_lights: Vec<_> = self.lights.lights.iter().map(|l| l.to_raw()).collect();
+            let raw_lights = self.lights.to_raw();
             let staging_buffer =
                 self.context
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Staging"),
-                        contents: bytemuck::cast_slice(&raw_lights),
+                        contents: bytemuck::cast_slice(&[raw_lights]),
                         usage: wgpu::BufferUsage::COPY_SRC,
                     });
             encoder.copy_buffer_to_buffer(
@@ -306,7 +306,7 @@ impl State {
                 0,
                 &self.lights.buffer,
                 0,
-                std::mem::size_of::<light::LightRaw>() as wgpu::BufferAddress,
+                std::mem::size_of::<light::LightsRaw>() as wgpu::BufferAddress,
             );
         }
 

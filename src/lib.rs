@@ -117,7 +117,7 @@ impl Context {
                         ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<
-                                light::LightRaw,
+                                light::LightsRaw,
                             >()
                                 as _),
                         },
