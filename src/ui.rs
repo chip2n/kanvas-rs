@@ -82,10 +82,6 @@ impl DebugUi {
             .handle_event(self.context.io_mut(), window, event);
     }
 
-    pub fn get_texture<'a>(&'a self, id: imgui::TextureId) -> Option<&'a imgui_wgpu::Texture> {
-        self.renderer.textures.get(id)
-    }
-
     pub fn render(
         &mut self,
         context: &Context,
@@ -171,7 +167,7 @@ impl DebugUi {
     fn shadow_textures<'a>(&'a self) -> impl Iterator<Item = &'a imgui_wgpu::Texture> + 'a {
         self.shadow_map_ids
             .iter()
-            .map(move |id| self.get_texture(*id).unwrap())
+            .map(move |id| self.renderer.textures.get(*id).unwrap())
     }
 }
 
