@@ -71,7 +71,7 @@ impl Context {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY, // used for shadow maps
                     limits: Default::default(),
                     shader_validation: true,
                 },
@@ -131,7 +131,7 @@ impl Context {
                             component_type: wgpu::TextureComponentType::Float,
                             dimension: wgpu::TextureViewDimension::D2,
                         },
-                        count: None,
+                        count: std::num::NonZeroU32::new(light::MAX_LIGHTS as u32),
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,

@@ -8,15 +8,11 @@ use std::mem;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Range;
 
-// TODO support moar lights
-//const MAX_LIGHTS: usize = 10;
-const MAX_LIGHTS: usize = 1;
-
 const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: 1024,
     height: 1024,
-    depth: MAX_LIGHTS as u32,
+    depth: 1,
 };
 
 pub struct ShadowMapTarget {
@@ -93,8 +89,9 @@ impl ShadowPass {
         instances_bind_group_layout: &wgpu::BindGroupLayout,
         vertex_descs: &[wgpu::VertexBufferDescriptor],
     ) -> Self {
-        // Make room for all 6 sides of cubemap
-        let uniforms_size = (6 * wgpu::BIND_BUFFER_ALIGNMENT) as wgpu::BufferAddress;
+        // Make room for all 6 sides of cubemap for each light
+        let uniforms_size =
+            (light::MAX_LIGHTS as u64 * 6 * wgpu::BIND_BUFFER_ALIGNMENT) as wgpu::BufferAddress;
         let uniforms_binding_size = NonZeroU64::new(mem::size_of::<ShadowUniforms>() as u64);
         let uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shadow uniforms"),
@@ -311,16 +308,17 @@ impl ShadowPass {
         }
     }
 
-    pub fn update_light(&self, queue: &wgpu::Queue, light: &light::Light) {
+    pub fn update_light(&self, queue: &wgpu::Queue, light_index: usize, light: &light::Light) {
         let projections = create_light_proj_cube(cgmath::EuclideanSpace::from_vec(light.position));
         for (i, proj) in projections.iter().enumerate() {
             let uniforms = ShadowUniforms {
                 light_proj: *proj,
                 light_position: light.position,
             };
+            let buffer_offset = light_buffer_offset(light_index, i) as wgpu::BufferAddress;
             queue.write_buffer(
                 &self.uniforms_buffer,
-                (i * wgpu::BIND_BUFFER_ALIGNMENT as usize) as wgpu::BufferAddress,
+                buffer_offset,
                 bytemuck::bytes_of(&uniforms),
             );
         }
@@ -333,24 +331,33 @@ pub struct ShadowPassRunner<'a> {
 }
 
 impl<'a> ShadowPassRunner<'a> {
-    pub fn render<'b>(&mut self, data: ShadowPassRenderData<'b>, face_index: usize)
-    where
+    pub fn render<'b>(
+        &mut self,
+        data: ShadowPassRenderData<'b>,
+        face_index: usize,
+        light_index: usize,
+    ) where
         'b: 'a,
     {
+        let buffer_offset = light_buffer_offset(light_index, face_index) as wgpu::DynamicOffset;
+
         self.render_pass
             .set_vertex_buffer(0, data.vertex_buffer.slice(..));
         self.render_pass
             .set_index_buffer(data.index_buffer.slice(..));
-        self.render_pass.set_bind_group(
-            0,
-            &self.uniforms_bind_group,
-            &[(face_index * wgpu::BIND_BUFFER_ALIGNMENT as usize) as wgpu::DynamicOffset],
-        );
+        self.render_pass
+            .set_bind_group(0, &self.uniforms_bind_group, &[buffer_offset]);
         self.render_pass
             .set_bind_group(1, &data.instances_bind_group, &[]);
         self.render_pass
             .draw_indexed(data.indices, 0, data.instances);
     }
+}
+
+fn light_buffer_offset(light_index: usize, face_index: usize) -> usize {
+    let light_offset = light_index * 6 * wgpu::BIND_BUFFER_ALIGNMENT as usize;
+    let face_offset = face_index * wgpu::BIND_BUFFER_ALIGNMENT as usize;
+    light_offset + face_offset
 }
 
 pub struct ShadowPassRenderData<'a> {

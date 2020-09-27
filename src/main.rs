@@ -314,8 +314,10 @@ impl State {
         self.lights.config.shadows_enabled = self.debug_ui.shadows_enabled;
         self.lights.config.upload(&self.context.queue);
 
-        self.shadow_pass
-            .update_light(&self.context.queue, &self.lights.lights[0]);
+        for (i, light) in self.lights.lights.iter().enumerate() {
+            self.shadow_pass
+                .update_light(&self.context.queue, i, &light);
+        }
 
         self.context.queue.submit(iter::once(encoder.finish()));
 
@@ -350,18 +352,25 @@ impl State {
 
         // render shadow maps
         if self.lights.config.shadows_enabled {
-            for face_index in 0..6 {
-                // shadow pass
-                let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
-                for mesh in &self.obj_model.meshes {
-                    pass.render(
-                        shadow::ShadowPassRenderData::from_mesh(&mesh, &self.instances_bind_group),
-                        face_index,
-                    );
+            for (i, light) in self.lights.lights.iter().enumerate() {
+                for face_index in 0..6 {
+                    // shadow pass
+                    let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
+                    for mesh in &self.obj_model.meshes {
+                        pass.render(
+                            shadow::ShadowPassRenderData::from_mesh(
+                                &mesh,
+                                &self.instances_bind_group,
+                            ),
+                            face_index,
+                            i,
+                        );
+                    }
                 }
+
+                self.shadow_pass
+                    .copy_to_cubemap(&mut encoder, &self.lights.shadow_textures[i]);
             }
-            self.shadow_pass
-                .copy_to_cubemap(&mut encoder, &self.lights.shadow_cubemap.texture);
         }
 
         {

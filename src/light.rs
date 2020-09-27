@@ -4,11 +4,13 @@ use crate::prelude::*;
 use crate::shadow;
 use wgpu::util::DeviceExt;
 
-const MAX_LIGHTS: usize = 2;
+pub const MAX_LIGHTS: usize = 2;
 
 pub struct Lights {
+    // TODO array of Options?
     pub lights: Vec<Light>,
-    pub shadow_cubemap: shadow::ShadowCubemap,
+    pub shadow_textures: [wgpu::Texture; MAX_LIGHTS],
+    pub shadow_texture_views: [wgpu::TextureView; MAX_LIGHTS],
 
     pub config: LightConfig,
     pub buffer: wgpu::Buffer,
@@ -59,7 +61,16 @@ impl Lights {
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
-        let shadow_cubemap = shadow::ShadowCubemap::new(context);
+        let (shadow_sampler, shadow_textures, shadow_texture_views) = {
+            let shadow_cubemap1 = shadow::ShadowCubemap::new(context);
+            let shadow_cubemap2 = shadow::ShadowCubemap::new(context);
+
+            (
+                shadow_cubemap1.sampler,
+                [shadow_cubemap1.texture, shadow_cubemap2.texture],
+                [shadow_cubemap1.texture_view, shadow_cubemap2.texture_view],
+            )
+        };
 
         let bind_group = context
             .device
@@ -76,11 +87,11 @@ impl Lights {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&shadow_cubemap.texture_view),
+                        resource: wgpu::BindingResource::TextureViewArray(&shadow_texture_views),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&shadow_cubemap.sampler),
+                        resource: wgpu::BindingResource::Sampler(&shadow_sampler), // TODO don't store sampler in every cubemap (?)
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
@@ -92,7 +103,8 @@ impl Lights {
 
         Self {
             lights,
-            shadow_cubemap,
+            shadow_textures,
+            shadow_texture_views,
             config,
             buffer,
             bind_group,
@@ -113,10 +125,7 @@ impl Lights {
             colors[i] = light.color.extend(0.0);
         }
 
-        LightsRaw {
-            positions,
-            colors,
-        }
+        LightsRaw { positions, colors }
     }
 }
 

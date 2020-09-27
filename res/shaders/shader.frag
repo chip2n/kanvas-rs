@@ -23,8 +23,8 @@ layout(set = 3, binding = 0) uniform Light {
   vec3 light_positions[MAX_LIGHTS];
   vec3 light_colors[MAX_LIGHTS];
 };
-layout(set = 3, binding = 1) uniform textureCube shadow_tex;
-layout(set = 3, binding = 2) uniform sampler shadow_map;
+layout(set = 3, binding = 1) uniform textureCube shadow_texs[MAX_LIGHTS];
+layout(set = 3, binding = 2) uniform sampler shadow_sampler;
 layout(set = 3, binding = 3) uniform LightConfig {
   bool shadows_enabled;
 };
@@ -41,7 +41,7 @@ vec3 sample_offset_directions[20] = vec3[](
    vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
 );
 
-float calculate_shadow(vec3 light_position) {
+float calculate_shadow(vec3 light_position, int shadow_tex_index) {
   if (!shadows_enabled) {
     return 0.0;
   }
@@ -63,7 +63,7 @@ float calculate_shadow(vec3 light_position) {
   float disk_radius = (1.0 + (view_distance / z_far)) / 25.0;
 
   for (int i = 0; i < samples; ++i) {
-    float closest_depth = texture(samplerCube(shadow_tex, shadow_map), frag_to_light + sample_offset_directions[i] * disk_radius).r;
+    float closest_depth = texture(samplerCube(shadow_texs[shadow_tex_index], shadow_sampler), frag_to_light + sample_offset_directions[i] * disk_radius).r;
     closest_depth *= z_far; // undo linear [0,1] mapping done in shadow pass fragment stage
     if (current_depth - bias > closest_depth) {
       shadow += 1.0;
@@ -74,7 +74,7 @@ float calculate_shadow(vec3 light_position) {
   return shadow;
 }
 
-vec3 calculate_light(vec3 light_position, vec3 light_position_tangent_space, vec3 light_color, bool shadows) {
+vec3 calculate_light(vec3 light_position, vec3 light_position_tangent_space, vec3 light_color, int shadow_tex_index) {
   // Obtain normal from the normal map
   vec4 object_normal = texture(sampler2D(t_normal, s_normal), v_tex_coords);
 
@@ -99,10 +99,7 @@ vec3 calculate_light(vec3 light_position, vec3 light_position_tangent_space, vec
   vec3 ambient_color = light_color * ambient_strength;
 
   // calculate shadow
-  float shadow = 0.0;
-  if (shadows) {
-    shadow = calculate_shadow(light_position);
-  }
+  float shadow = calculate_shadow(light_position, shadow_tex_index);
 
   return (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
 }
@@ -115,7 +112,7 @@ void main() {
     vec3 light_position_tangent_space = v_light_positions[i];
     vec3 light_color = light_colors[i];
 
-    result += calculate_light(light_position, light_position_tangent_space, light_color, i == 0);
+    result += calculate_light(light_position, light_position_tangent_space, light_color, i);
   }
   
   f_color = vec4(result, 1.0);
