@@ -101,7 +101,12 @@ vec3 calculate_light(vec3 light_position, vec3 light_position_tangent_space, vec
   // calculate shadow
   float shadow = calculate_shadow(light_position, shadow_tex_index);
 
-  return (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
+  // distance falloff
+  float strength = 100;
+  float distance_to_light = length(v_position_world_space - light_position);
+  float intensity = strength * (1 / (distance_to_light * distance_to_light));
+
+  return (ambient_color + intensity * (1.0 - shadow) * (diffuse_color + specular_color)) * object_color.xyz;
 }
 
 void main() {
