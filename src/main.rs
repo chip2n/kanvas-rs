@@ -281,14 +281,16 @@ impl State {
         // Update the light
         {
             for light in self.lights.lights.iter_mut() {
-                let old_position = light.position;
-                light.position = cgmath::Quaternion::from_axis_angle(
-                    (0.0, 1.0, 0.0).into(),
-                    cgmath::Deg(60.0 * dt.as_secs_f32()),
-                ) * old_position;
+                if let Some(light) = light {
+                    let old_position = light.position;
+                    light.position = cgmath::Quaternion::from_axis_angle(
+                        (0.0, 1.0, 0.0).into(),
+                        cgmath::Deg(60.0 * dt.as_secs_f32()),
+                    ) * old_position;
 
-                if let Some(billboard) = self.billboards.get(light.billboard) {
-                    billboard.position = light.position;
+                    if let Some(billboard) = self.billboards.get(light.billboard) {
+                        billboard.position = light.position;
+                    }
                 }
             }
 
@@ -315,8 +317,10 @@ impl State {
         self.lights.config.upload(&self.context.queue);
 
         for (i, light) in self.lights.lights.iter().enumerate() {
-            self.shadow_pass
-                .update_light(&self.context.queue, i, &light);
+            if let Some(light) = light {
+                self.shadow_pass
+                    .update_light(&self.context.queue, i, &light);
+            }
         }
 
         self.context.queue.submit(iter::once(encoder.finish()));
@@ -353,23 +357,25 @@ impl State {
         // render shadow maps
         if self.lights.config.shadows_enabled {
             for (i, light) in self.lights.lights.iter().enumerate() {
-                for face_index in 0..6 {
-                    // shadow pass
-                    let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
-                    for mesh in &self.obj_model.meshes {
-                        pass.render(
-                            shadow::ShadowPassRenderData::from_mesh(
-                                &mesh,
-                                &self.instances_bind_group,
-                            ),
-                            face_index,
-                            i,
-                        );
+                if let Some(_) = light {
+                    for face_index in 0..6 {
+                        // shadow pass
+                        let mut pass = self.shadow_pass.begin(&mut encoder, face_index);
+                        for mesh in &self.obj_model.meshes {
+                            pass.render(
+                                shadow::ShadowPassRenderData::from_mesh(
+                                    &mesh,
+                                    &self.instances_bind_group,
+                                ),
+                                face_index,
+                                i,
+                            );
+                        }
                     }
-                }
 
-                self.shadow_pass
-                    .copy_to_cubemap(&mut encoder, &self.lights.shadow_textures[i]);
+                    self.shadow_pass
+                        .copy_to_cubemap(&mut encoder, &self.lights.shadow_textures[i]);
+                }
             }
         }
 

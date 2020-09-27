@@ -7,8 +7,7 @@ use wgpu::util::DeviceExt;
 pub const MAX_LIGHTS: usize = 2;
 
 pub struct Lights {
-    // TODO array of Options?
-    pub lights: Vec<Light>,
+    pub lights: [Option<Light>; MAX_LIGHTS],
     pub shadow_textures: [wgpu::Texture; MAX_LIGHTS],
     pub shadow_texture_views: [wgpu::TextureView; MAX_LIGHTS],
 
@@ -25,7 +24,7 @@ impl Lights {
     ) -> Self {
         let config = LightConfig::new(&context.device);
 
-        let lights = vec![
+        let lights = [
             {
                 let position: Vector3 = (-15.0, 12.0, 8.0).into();
                 let billboard = billboards.insert(
@@ -35,7 +34,7 @@ impl Lights {
                         material: light_material,
                     },
                 );
-                Light::new(position, (1.0, 1.0, 1.0), billboard)
+                Some(Light::new(position, (1.0, 1.0, 1.0), billboard))
             },
             {
                 let position: Vector3 = (10.0, 10.0, 0.0).into();
@@ -46,7 +45,7 @@ impl Lights {
                         material: light_material,
                     },
                 );
-                Light::new(position, (1.0, 1.0, 1.0), billboard)
+                Some(Light::new(position, (1.0, 1.0, 1.0), billboard))
             },
         ];
 
@@ -115,14 +114,16 @@ impl Lights {
         Self::map_raw(&self.lights)
     }
 
-    fn map_raw(lights: &Vec<Light>) -> LightsRaw {
+    fn map_raw(lights: &[Option<Light>]) -> LightsRaw {
         let mut positions = [Vector4::zero(); MAX_LIGHTS];
         let mut colors = [Vector4::zero(); MAX_LIGHTS];
 
         for i in 0..MAX_LIGHTS {
             let light = &lights[i];
-            positions[i] = light.position.extend(0.0);
-            colors[i] = light.color.extend(0.0);
+            if let Some(light) = light {
+                positions[i] = light.position.extend(0.0);
+                colors[i] = light.color.extend(0.0);
+            }
         }
 
         LightsRaw { positions, colors }
