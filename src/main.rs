@@ -402,7 +402,6 @@ impl State {
                 &frame.output,
                 &mut encoder,
                 &self.debug_pass,
-                &self.lights.shadow_texture_bind_groups,
             );
         }
 

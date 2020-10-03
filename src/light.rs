@@ -9,8 +9,6 @@ pub const MAX_LIGHTS: usize = 2;
 pub struct Lights {
     pub lights: [Option<Light>; MAX_LIGHTS],
     pub shadow_textures: [wgpu::Texture; MAX_LIGHTS],
-    pub shadow_texture_views: [wgpu::TextureView; MAX_LIGHTS],
-    pub shadow_texture_bind_groups: [wgpu::BindGroup; MAX_LIGHTS],
 
     pub config: LightConfig,
     pub buffer: wgpu::Buffer,
@@ -112,48 +110,9 @@ impl Lights {
                 label: None,
             });
 
-        // TODO not needed?
-
-        let shadow_texture_bind_groups = [
-            context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &context.texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&shadow_texture_views[0]),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
-                        },
-                    ],
-                    label: None,
-                }),
-            context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &context.texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&shadow_texture_views[1]),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
-                        },
-                    ],
-                    label: None,
-                }),
-        ];
-
         Self {
             lights,
             shadow_textures,
-            shadow_texture_views,
-            shadow_texture_bind_groups,
             config,
             buffer,
             bind_group,

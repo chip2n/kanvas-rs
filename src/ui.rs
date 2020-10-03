@@ -1,6 +1,5 @@
 use crate::debug;
 use crate::light;
-use crate::shadow;
 use crate::Context;
 
 pub struct DebugUi {
@@ -12,7 +11,6 @@ pub struct DebugUi {
     platform: imgui_winit_support::WinitPlatform,
     last_cursor: Option<imgui::MouseCursor>,
     shadow_map_ids: Vec<imgui::TextureId>,
-    shadow_texture_views: Vec<wgpu::TextureView>,
     shadow_bind_groups: Vec<wgpu::BindGroup>,
 }
 
@@ -118,7 +116,6 @@ impl DebugUi {
             platform,
             last_cursor,
             shadow_map_ids,
-            shadow_texture_views,
             shadow_bind_groups,
         }
     }
@@ -139,7 +136,6 @@ impl DebugUi {
         output: &wgpu::SwapChainTexture,
         encoder: &mut wgpu::CommandEncoder,
         debug_pass: &debug::DebugPass,
-        shadow_bind_groups: &[wgpu::BindGroup],
     ) {
         for (i, tex) in self.shadow_textures().enumerate() {
             let shadow_bind_group = &self.shadow_bind_groups[i];
