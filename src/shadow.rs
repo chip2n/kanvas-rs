@@ -23,7 +23,6 @@ pub struct ShadowMapTarget {
 pub struct ShadowCubemap {
     pub texture: wgpu::Texture,
     pub texture_view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
 }
 
 impl ShadowCubemap {
@@ -53,22 +52,9 @@ impl ShadowCubemap {
             array_layer_count: NonZeroU32::new(1),
         });
 
-        let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("shadow"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            compare: None,
-            ..Default::default()
-        });
-
         Self {
             texture,
             texture_view,
-            sampler,
         }
     }
 }
@@ -143,18 +129,6 @@ impl ShadowPass {
             Some(pipeline::DepthConfig::default()),
             vertex_descs.clone(),
         );
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("shadow"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            compare: None,
-            ..Default::default()
-        });
 
         let create_target = || {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
