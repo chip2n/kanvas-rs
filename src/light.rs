@@ -10,6 +10,7 @@ pub struct Lights {
     pub lights: [Option<Light>; MAX_LIGHTS],
     pub shadow_textures: [wgpu::Texture; MAX_LIGHTS],
     pub shadow_texture_views: [wgpu::TextureView; MAX_LIGHTS],
+    pub shadow_texture_bind_groups: [wgpu::BindGroup; MAX_LIGHTS],
 
     pub config: LightConfig,
     pub buffer: wgpu::Buffer,
@@ -60,12 +61,23 @@ impl Lights {
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
-        let (shadow_sampler, shadow_textures, shadow_texture_views) = {
+        let shadow_sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
+            ..Default::default()
+        });
+
+        let (shadow_textures, shadow_texture_views) = {
             let shadow_cubemap1 = shadow::ShadowCubemap::new(context);
             let shadow_cubemap2 = shadow::ShadowCubemap::new(context);
 
             (
-                shadow_cubemap1.sampler,
                 [shadow_cubemap1.texture, shadow_cubemap2.texture],
                 [shadow_cubemap1.texture_view, shadow_cubemap2.texture_view],
             )
@@ -100,10 +112,48 @@ impl Lights {
                 label: None,
             });
 
+        // TODO not needed?
+
+        let shadow_texture_bind_groups = [
+            context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &context.texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&shadow_texture_views[0]),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                        },
+                    ],
+                    label: None,
+                }),
+            context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &context.texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&shadow_texture_views[1]),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                        },
+                    ],
+                    label: None,
+                }),
+        ];
+
         Self {
             lights,
             shadow_textures,
             shadow_texture_views,
+            shadow_texture_bind_groups,
             config,
             buffer,
             bind_group,

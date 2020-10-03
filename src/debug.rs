@@ -1,5 +1,6 @@
 use crate::geometry;
 use crate::geometry::Vertex;
+use crate::prelude::*;
 use crate::{compile_frag, compile_vertex};
 use wgpu::util::DeviceExt;
 
@@ -10,33 +11,29 @@ pub struct DebugPass {
 }
 
 impl DebugPass {
-    pub fn new(
-        device: &wgpu::Device,
-        shader_compiler: &mut shaderc::Compiler,
-        texture_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    pub fn new(context: &mut Context) -> Self {
+        let vertex_buffer = context.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&geometry::PLANE_VERTICES),
             usage: wgpu::BufferUsage::VERTEX,
         });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = context.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&geometry::PLANE_INDICES),
             usage: wgpu::BufferUsage::INDEX,
         });
 
         let pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            let layout = context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render pipeline"),
                 push_constant_ranges: &[],
-                bind_group_layouts: &[&texture_bind_group_layout],
+                bind_group_layouts: &[&context.texture_bind_group_layout],
             });
 
-            let vs_module = compile_vertex!(&device, shader_compiler, "debug.vert").unwrap();
-            let fs_module = compile_frag!(&device, shader_compiler, "debug.frag").unwrap();
+            let vs_module = compile_vertex!(&context.device, &mut context.shader_compiler, "debug.vert").unwrap();
+            let fs_module = compile_frag!(&context.device, &mut context.shader_compiler, "debug.frag").unwrap();
 
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            context.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("debug"),
                 layout: Some(&layout),
                 vertex_stage: wgpu::ProgrammableStageDescriptor {

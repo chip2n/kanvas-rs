@@ -1,4 +1,5 @@
 use crate::debug;
+use crate::light;
 use crate::shadow;
 use crate::Context;
 
@@ -10,11 +11,13 @@ pub struct DebugUi {
     renderer: imgui_wgpu::Renderer,
     platform: imgui_winit_support::WinitPlatform,
     last_cursor: Option<imgui::MouseCursor>,
-    shadow_map_ids: [imgui::TextureId; 6],
+    shadow_map_ids: Vec<imgui::TextureId>,
+    shadow_texture_views: Vec<wgpu::TextureView>,
+    shadow_bind_groups: Vec<wgpu::BindGroup>,
 }
 
 impl DebugUi {
-    pub fn new(context: &Context) -> Self {
+    pub fn new(context: &Context, shadow_textures: &[wgpu::Texture; light::MAX_LIGHTS]) -> Self {
         let hidpi_factor = 1.0;
         let mut imgui_context = imgui::Context::create();
         let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
@@ -51,14 +54,60 @@ impl DebugUi {
 
         let last_cursor = None;
 
-        let shadow_map_ids = [
-            create_texture(&context.device, &mut renderer),
-            create_texture(&context.device, &mut renderer),
-            create_texture(&context.device, &mut renderer),
-            create_texture(&context.device, &mut renderer),
-            create_texture(&context.device, &mut renderer),
-            create_texture(&context.device, &mut renderer),
-        ];
+        let shadow_sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
+            ..Default::default()
+        });
+
+        let shadow_map_ids: Vec<_> = (0..6 * light::MAX_LIGHTS)
+            .map(|_| create_texture(&context.device, &mut renderer))
+            .collect();
+
+        let shadow_texture_views: Vec<wgpu::TextureView> = shadow_textures
+            .iter()
+            .flat_map(|tex| {
+                (0..6)
+                    .map(|i| {
+                        tex.create_view(&wgpu::TextureViewDescriptor {
+                            label: Some("Shadow"),
+                            format: None,
+                            dimension: Some(wgpu::TextureViewDimension::D2),
+                            aspect: wgpu::TextureAspect::All,
+                            base_mip_level: 0,
+                            level_count: None,
+                            base_array_layer: i,
+                            array_layer_count: None,
+                        })
+                    })
+                    .collect::<Vec<wgpu::TextureView>>()
+            })
+            .collect();
+
+        let shadow_bind_groups: Vec<_> = shadow_texture_views.iter().map(|view| {
+            context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &context.texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                        },
+                    ],
+                    label: None,
+                })
+        }).collect();
 
         DebugUi {
             is_visible: false,
@@ -69,6 +118,8 @@ impl DebugUi {
             platform,
             last_cursor,
             shadow_map_ids,
+            shadow_texture_views,
+            shadow_bind_groups,
         }
     }
 
@@ -88,11 +139,11 @@ impl DebugUi {
         output: &wgpu::SwapChainTexture,
         encoder: &mut wgpu::CommandEncoder,
         debug_pass: &debug::DebugPass,
-        shadow_targets: &[shadow::ShadowMapTarget; 6],
+        shadow_bind_groups: &[wgpu::BindGroup],
     ) {
         for (i, tex) in self.shadow_textures().enumerate() {
-            let shadow_target = &shadow_targets[i];
-            debug_pass.render(encoder, &tex.view, &shadow_target.bind_group);
+            let shadow_bind_group = &self.shadow_bind_groups[i];
+            debug_pass.render(encoder, &tex.view, &shadow_bind_group);
         }
 
         self.platform

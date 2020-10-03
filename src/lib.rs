@@ -51,6 +51,7 @@ pub struct Context {
     pub materials: Materials,
     pub instances_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Context {
@@ -152,6 +153,29 @@ impl Context {
                 label: None,
             });
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+
         Context {
             window,
             surface,
@@ -163,6 +187,7 @@ impl Context {
             materials,
             instances_bind_group_layout,
             light_bind_group_layout,
+            texture_bind_group_layout,
         }
     }
 

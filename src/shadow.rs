@@ -18,7 +18,6 @@ pub const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
 pub struct ShadowMapTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub bind_group: wgpu::BindGroup,
 }
 
 pub struct ShadowCubemap {
@@ -79,7 +78,6 @@ pub struct ShadowPass {
     pub uniforms_buffer: wgpu::Buffer,
     pub uniforms_bind_group: wgpu::BindGroup,
     pub targets: [ShadowMapTarget; 6],
-    pub target_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl ShadowPass {
@@ -158,29 +156,6 @@ impl ShadowPass {
             ..Default::default()
         });
 
-        let target_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::SampledTexture {
-                            multisampled: false,
-                            dimension: wgpu::TextureViewDimension::D2,
-                            component_type: wgpu::TextureComponentType::Float,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler { comparison: false },
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-
         let create_target = || {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 size: SHADOW_SIZE,
@@ -205,25 +180,9 @@ impl ShadowPass {
                 array_layer_count: NonZeroU32::new(1),
             });
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &target_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-                label: None,
-            });
-
             ShadowMapTarget {
                 texture,
                 view,
-                bind_group,
             }
         };
         let targets = [
@@ -240,7 +199,6 @@ impl ShadowPass {
             uniforms_buffer,
             uniforms_bind_group,
             targets,
-            target_bind_group_layout,
         }
     }
 

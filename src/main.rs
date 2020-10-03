@@ -168,13 +168,8 @@ impl State {
 
         let lights = light::Lights::new(&context, &mut billboards, light_bulb_material);
 
-        let debug_pass = debug::DebugPass::new(
-            &context.device,
-            &mut context.shader_compiler,
-            &shadow_pass.target_bind_group_layout,
-        );
-
-        let debug_ui = ui::DebugUi::new(&context);
+        let debug_pass = debug::DebugPass::new(&mut context);
+        let debug_ui = ui::DebugUi::new(&context, &lights.shadow_textures);
 
         State {
             context,
@@ -407,7 +402,7 @@ impl State {
                 &frame.output,
                 &mut encoder,
                 &self.debug_pass,
-                &self.shadow_pass.targets,
+                &self.lights.shadow_texture_bind_groups,
             );
         }
 
