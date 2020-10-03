@@ -315,44 +315,6 @@ impl<'a> ShadowPassRenderData<'a> {
 pub fn create_light_proj_cube(light_pos: cgmath::Point3<f32>) -> Vec<Matrix4> {
     let light_proj = create_proj_mat(&light::LightType::Point);
     let transforms = vec![
-        /*
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, -1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        light_proj
-            * Matrix4::look_at(
-                light_pos,
-                light_pos + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                -cgmath::Vector3::unit_z(),
-            ),
-        */
         light_proj
             * Matrix4::look_at(
                 light_pos,
