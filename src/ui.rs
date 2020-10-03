@@ -28,6 +28,7 @@ impl DebugUi {
 
         let font_size = (13.0 * hidpi_factor) as f32;
         imgui_context.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+        imgui_context.style_mut().scrollbar_size = 8.0;
 
         imgui_context
             .fonts()
@@ -88,24 +89,27 @@ impl DebugUi {
             })
             .collect();
 
-        let shadow_bind_groups: Vec<_> = shadow_texture_views.iter().map(|view| {
-            context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &context.texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&shadow_sampler),
-                        },
-                    ],
-                    label: None,
-                })
-        }).collect();
+        let shadow_bind_groups: Vec<_> = shadow_texture_views
+            .iter()
+            .map(|view| {
+                context
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &context.texture_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(&view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                            },
+                        ],
+                        label: None,
+                    })
+            })
+            .collect();
 
         DebugUi {
             is_visible: false,
@@ -173,23 +177,33 @@ impl DebugUi {
             let mut shadows_enabled = self.shadows_enabled;
             window
                 .position([64.0, 256.0], imgui::Condition::FirstUseEver)
-                .content_size([128.0 * 3.0, 0.0])
+                .size([128.0 * 3.0, 512.0], imgui::Condition::FirstUseEver)
                 .resizable(false)
+                .always_vertical_scrollbar(true)
                 .build(&ui, || {
                     ui.checkbox(imgui::im_str!("Shadows enabled"), &mut shadows_enabled);
                     ui.separator();
-                    ui.columns(3, imgui::im_str!("Columnz"), false);
-                    for (i, image) in images.iter().enumerate() {
-                        if i % 6 == 0 {
-                            ui.text(format!("Light #{}", i / 6));
-                            ui.next_column();
-                            ui.next_column();
-                            ui.next_column();
+
+                    for (i, imgs) in images.chunks(6).enumerate() {
+                        let title = imgui::ImString::new(format!("Light #{}", i));
+
+                        let header = imgui::CollapsingHeader::new(&title);
+                        let is_expanded = header.build(&ui);
+
+                        let style_token =
+                            ui.push_style_vars(&[
+                                imgui::StyleVar::ItemSpacing([4.0, 4.0]),
+                            ]);
+                        if is_expanded {
+                            ui.columns(3, imgui::im_str!("Columnz"), false);
+                            for img in imgs {
+                                img.build(&ui);
+                                ui.next_column();
+                            }
+                            ui.columns(1, imgui::im_str!("Columnz"), false);
                         }
-                        image.build(&ui);
-                        ui.next_column();
+                        style_token.pop(&ui);
                     }
-                    ui.columns(1, imgui::im_str!("Columnz"), false);
                 });
 
             self.shadows_enabled = shadows_enabled;
