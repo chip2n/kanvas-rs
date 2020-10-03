@@ -179,7 +179,13 @@ impl DebugUi {
                     ui.checkbox(imgui::im_str!("Shadows enabled"), &mut shadows_enabled);
                     ui.separator();
                     ui.columns(3, imgui::im_str!("Columnz"), false);
-                    for image in images {
+                    for (i, image) in images.iter().enumerate() {
+                        if i % 6 == 0 {
+                            ui.text(format!("Light #{}", i / 6));
+                            ui.next_column();
+                            ui.next_column();
+                            ui.next_column();
+                        }
                         image.build(&ui);
                         ui.next_column();
                     }
