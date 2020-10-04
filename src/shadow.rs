@@ -26,8 +26,8 @@ pub struct ShadowCubemap {
 }
 
 impl ShadowCubemap {
-    pub fn new(context: &Context) -> Self {
-        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: 1024,
                 height: 1024,

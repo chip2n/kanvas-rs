@@ -15,7 +15,7 @@ pub struct DebugUi {
 }
 
 impl DebugUi {
-    pub fn new(context: &Context, shadow_textures: &[wgpu::Texture; light::MAX_LIGHTS]) -> Self {
+    pub fn new(context: &Context, lights: &light::Lights) -> Self {
         let hidpi_factor = 1.0;
         let mut imgui_context = imgui::Context::create();
         let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
@@ -70,7 +70,7 @@ impl DebugUi {
             .collect();
 
         // Create a texture views for each face of each shadow cubemap texture
-        let shadow_texture_views: Vec<wgpu::TextureView> = shadow_textures
+        let shadow_texture_views: Vec<wgpu::TextureView> = lights.shadow_textures
             .iter()
             .flat_map(|tex| {
                 (0..6)

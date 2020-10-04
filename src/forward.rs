@@ -9,7 +9,6 @@ use crate::{compile_frag, compile_vertex};
 use wgpu::util::DeviceExt;
 
 pub struct ForwardPass {
-    pub texture_bind_group_layout: wgpu::BindGroupLayout,
     pub uniform_bind_group_layout: wgpu::BindGroupLayout,
 
     pub uniforms: Uniforms,
@@ -23,47 +22,6 @@ pub struct ForwardPass {
 
 impl ForwardPass {
     pub fn new(context: &mut Context) -> Self {
-        let texture_bind_group_layout =
-            context
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture {
-                                multisampled: false,
-                                dimension: wgpu::TextureViewDimension::D2,
-                                component_type: wgpu::TextureComponentType::Float,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler { comparison: false },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture {
-                                multisampled: false,
-                                dimension: wgpu::TextureViewDimension::D2,
-                                component_type: wgpu::TextureComponentType::Float,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler { comparison: false },
-                            count: None,
-                        },
-                    ],
-                    label: Some("texture_bind_group_layout"),
-                });
-
         let uniforms = Uniforms::new();
         let uniform_buffer = context
             .device
@@ -117,7 +75,7 @@ impl ForwardPass {
                     label: Some("Render pipeline"),
                     push_constant_ranges: &[],
                     bind_group_layouts: &[
-                        &texture_bind_group_layout,
+                        &context.texture_normal_bind_group_layout,
                         &uniform_bind_group_layout,
                         &context.instances_bind_group_layout,
                         &context.light_bind_group_layout,
@@ -144,12 +102,10 @@ impl ForwardPass {
 
         let billboard_pipeline = crate::billboard::create_pipeline(
             context,
-            &texture_bind_group_layout,
             &uniform_bind_group_layout,
         );
 
         ForwardPass {
-            texture_bind_group_layout,
             uniform_bind_group_layout,
 
             uniforms,

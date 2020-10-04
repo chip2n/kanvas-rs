@@ -76,7 +76,6 @@ struct State {
     instances: Vec<model::Instance>,
     obj_model: model::Model,
     billboards: billboard::Billboards,
-    lights: light::Lights,
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
@@ -144,32 +143,40 @@ impl State {
 
         let (obj_model, cmds) = model::Model::load(
             &context.device,
-            &forward_pass.texture_bind_group_layout,
+            &context.texture_normal_bind_group_layout,
             "res/models/scene.obj",
         )
         .unwrap();
         context.queue.submit(cmds);
 
-        let (bulb_texture, cmd) =
-            texture::Texture::load(&context.device, "res/tex/bulb.png", false).unwrap();
-        context.queue.submit(std::iter::once(cmd));
-        let (static_normal_map_texture, cmd) =
-            texture::Texture::load(&context.device, "res/tex/normal_map_static.png", true).unwrap();
-        context.queue.submit(std::iter::once(cmd));
-
-        let light_bulb_material = context.create_material(
-            "Light bulb",
-            bulb_texture,
-            static_normal_map_texture,
-            &forward_pass.texture_bind_group_layout,
-        );
-
         let mut billboards = billboard::Billboards::new(&context);
 
-        let lights = light::Lights::new(&context, &mut billboards, light_bulb_material);
+        {
+            let position: Vector3 = (-15.0, 12.0, 8.0).into();
+            let billboard = billboards.insert(
+                &context,
+                billboard::Billboard {
+                    position,
+                    material: context.lights.material,
+                },
+            );
+            context.lights.add_light(position, billboard);
+        }
+
+        {
+            let position: Vector3 = (10.0, 10.0, 8.0).into();
+            let billboard = billboards.insert(
+                &context,
+                billboard::Billboard {
+                    position,
+                    material: context.lights.material,
+                },
+            );
+            context.lights.add_light(position, billboard);
+        }
 
         let debug_pass = debug::DebugPass::new(&mut context);
-        let debug_ui = ui::DebugUi::new(&context, &lights.shadow_textures);
+        let debug_ui = ui::DebugUi::new(&context, &context.lights);
 
         State {
             context,
@@ -181,7 +188,6 @@ impl State {
             instances,
             obj_model,
             billboards,
-            lights,
             shadow_pass,
             debug_pass,
             debug_ui,
@@ -271,7 +277,7 @@ impl State {
 
         // Update the light
         {
-            for light in self.lights.lights.iter_mut() {
+            for light in self.context.lights.lights.iter_mut() {
                 if let Some(light) = light {
                     let old_position = light.position;
                     light.position = cgmath::Quaternion::from_axis_angle(
@@ -285,7 +291,7 @@ impl State {
                 }
             }
 
-            let raw_lights = self.lights.to_raw();
+            let raw_lights = self.context.lights.to_raw();
             let staging_buffer =
                 self.context
                     .device
@@ -297,17 +303,17 @@ impl State {
             encoder.copy_buffer_to_buffer(
                 &staging_buffer,
                 0,
-                &self.lights.buffer,
+                &self.context.lights.buffer,
                 0,
                 std::mem::size_of::<light::LightsRaw>() as wgpu::BufferAddress,
             );
         }
 
         // Update light config
-        self.lights.config.shadows_enabled = self.debug_ui.shadows_enabled;
-        self.lights.config.upload(&self.context.queue);
+        self.context.lights.config.shadows_enabled = self.debug_ui.shadows_enabled;
+        self.context.lights.config.upload(&self.context.queue);
 
-        for (i, light) in self.lights.lights.iter().enumerate() {
+        for (i, light) in self.context.lights.lights.iter().enumerate() {
             if let Some(light) = light {
                 self.shadow_pass
                     .update_light(&self.context.queue, i, &light);
@@ -346,8 +352,8 @@ impl State {
         });
 
         // render shadow maps
-        if self.lights.config.shadows_enabled {
-            for (i, light) in self.lights.lights.iter().enumerate() {
+        if self.context.lights.config.shadows_enabled {
+            for (i, light) in self.context.lights.lights.iter().enumerate() {
                 if let Some(_) = light {
                     for face_index in 0..6 {
                         // shadow pass
@@ -365,7 +371,7 @@ impl State {
                     }
 
                     self.shadow_pass
-                        .copy_to_cubemap(&mut encoder, &self.lights.shadow_textures[i]);
+                        .copy_to_cubemap(&mut encoder, &self.context.lights.shadow_textures[i]);
                 }
             }
         }
@@ -380,7 +386,7 @@ impl State {
                 0..self.instances.len() as u32,
                 &self.forward_pass.uniform_bind_group,
                 &self.instances_bind_group,
-                &self.lights.bind_group,
+                &self.context.lights.bind_group,
             );
 
             render_pass.set_pipeline(&self.forward_pass.billboard_pipeline);
@@ -393,12 +399,8 @@ impl State {
 
         // Render debug UI
         if self.debug_ui.is_visible {
-            self.debug_ui.render(
-                &self.context,
-                &frame.output,
-                &mut encoder,
-                &self.debug_pass,
-            );
+            self.debug_ui
+                .render(&self.context, &frame.output, &mut encoder, &self.debug_pass);
         }
 
         self.context.queue.submit(iter::once(encoder.finish()));

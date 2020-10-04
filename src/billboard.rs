@@ -149,7 +149,6 @@ impl Billboards {
 
 pub fn create_pipeline(
     context: &mut Context,
-    texture_bind_group_layout: &wgpu::BindGroupLayout,
     uniform_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let layout = context
@@ -158,7 +157,7 @@ pub fn create_pipeline(
             label: Some("Render pipeline"),
             push_constant_ranges: &[],
             bind_group_layouts: &[
-                &texture_bind_group_layout,
+                &context.texture_normal_bind_group_layout,
                 &uniform_bind_group_layout,
                 &context.instances_bind_group_layout,
             ],

@@ -49,9 +49,11 @@ pub struct Context {
     pub swap_chain: wgpu::SwapChain,
     pub shader_compiler: shaderc::Compiler,
     pub materials: Materials,
+    pub lights: light::Lights,
     pub instances_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub texture_normal_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Context {
@@ -92,7 +94,7 @@ impl Context {
 
         let shader_compiler = shaderc::Compiler::new().unwrap();
 
-        let materials = Materials::default();
+        let mut materials = Materials::default();
 
         let instances_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -108,6 +110,69 @@ impl Context {
                 }],
                 label: Some("instances_bind_group_layout"),
             });
+
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+
+        let texture_normal_bind_group_layout =
+                device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::SampledTexture {
+                                multisampled: false,
+                                dimension: wgpu::TextureViewDimension::D2,
+                                component_type: wgpu::TextureComponentType::Float,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler { comparison: false },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::SampledTexture {
+                                multisampled: false,
+                                dimension: wgpu::TextureViewDimension::D2,
+                                component_type: wgpu::TextureComponentType::Float,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler { comparison: false },
+                            count: None,
+                        },
+                    ],
+                    label: Some("texture_bind_group_layout"),
+                });
 
         let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -153,28 +218,21 @@ impl Context {
                 label: None,
             });
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::SampledTexture {
-                            multisampled: false,
-                            dimension: wgpu::TextureViewDimension::D2,
-                            component_type: wgpu::TextureComponentType::Float,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler { comparison: false },
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        let (bulb_texture, cmd) =
+            texture::Texture::load(&device, "res/tex/bulb.png", false).unwrap();
+        queue.submit(std::iter::once(cmd));
+        let (static_normal_map_texture, cmd) =
+            texture::Texture::load(&device, "res/tex/normal_map_static.png", true).unwrap();
+        queue.submit(std::iter::once(cmd));
+
+        let light_material = materials.insert(Material::new(
+            &device,
+            "Light bulb",
+            bulb_texture,
+            static_normal_map_texture,
+            &texture_normal_bind_group_layout,
+        ));
+        let lights = light::Lights::new(&device, &light_bind_group_layout, light_material);
 
         Context {
             window,
@@ -185,9 +243,11 @@ impl Context {
             swap_chain,
             shader_compiler,
             materials,
+            lights,
             instances_bind_group_layout,
             light_bind_group_layout,
             texture_bind_group_layout,
+            texture_normal_bind_group_layout,
         }
     }
 
