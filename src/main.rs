@@ -79,6 +79,7 @@ struct State {
     shadow_pass: shadow::ShadowPass,
     debug_pass: debug::DebugPass,
     debug_ui: ui::DebugUi,
+    light_billboards: [Option<billboard::BillboardId>; light::MAX_LIGHTS],
 }
 
 impl State {
@@ -150,6 +151,7 @@ impl State {
         context.queue.submit(cmds);
 
         let mut billboards = billboard::Billboards::new(&context);
+        let mut light_billboards: [Option<billboard::BillboardId>; light::MAX_LIGHTS] = [None; light::MAX_LIGHTS];
 
         {
             let position: Vector3 = (-15.0, 12.0, 8.0).into();
@@ -160,7 +162,8 @@ impl State {
                     material: context.lights.material,
                 },
             );
-            context.lights.add_light(position, billboard);
+            let light_id = context.lights.add_light(position).unwrap();
+            light_billboards[light_id] = Some(billboard);
         }
 
         {
@@ -172,7 +175,8 @@ impl State {
                     material: context.lights.material,
                 },
             );
-            context.lights.add_light(position, billboard);
+            let light_id = context.lights.add_light(position).unwrap();
+            light_billboards[light_id] = Some(billboard);
         }
 
         let debug_pass = debug::DebugPass::new(&mut context);
@@ -191,6 +195,7 @@ impl State {
             shadow_pass,
             debug_pass,
             debug_ui,
+            light_billboards,
         }
     }
 
@@ -277,7 +282,7 @@ impl State {
 
         // Update the light
         {
-            for light in self.context.lights.lights.iter_mut() {
+            for (i, light) in self.context.lights.lights.iter_mut().enumerate() {
                 if let Some(light) = light {
                     let old_position = light.position;
                     light.position = cgmath::Quaternion::from_axis_angle(
@@ -285,7 +290,8 @@ impl State {
                         cgmath::Deg(60.0 * dt.as_secs_f32()),
                     ) * old_position;
 
-                    if let Some(billboard) = self.billboards.get(light.billboard) {
+                    let light_billboard = self.light_billboards[i].unwrap();
+                    if let Some(billboard) = self.billboards.get(light_billboard) {
                         billboard.position = light.position;
                     }
                 }

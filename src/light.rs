@@ -1,8 +1,9 @@
-use crate::billboard::{Billboard, BillboardId, Billboards};
 use crate::model;
 use crate::prelude::*;
 use crate::shadow;
 use wgpu::util::DeviceExt;
+
+pub type LightId = usize;
 
 /// The maximum number of lights supported at once
 pub const MAX_LIGHTS: usize = 2;
@@ -98,11 +99,13 @@ impl Lights {
         }
     }
 
-    pub fn add_light(&mut self, position: Vector3, billboard: BillboardId) {
-        match self.lights.iter().position(|l| l.is_none()) {
-            Some(i) => self.lights[i] = Some(Light::new(position, (1.0, 1.0, 1.0), billboard)),
+    pub fn add_light(&mut self, position: Vector3) -> Option<LightId> {
+        let index = self.lights.iter().position(|l| l.is_none());
+        match index {
+            Some(i) => self.lights[i] = Some(Light::new(position, (1.0, 1.0, 1.0))),
             None => eprintln!("Unable to add light - max count reached"),
         }
+        index
     }
 
     pub fn to_raw(&self) -> LightsRaw {
@@ -130,20 +133,17 @@ pub struct Light {
     pub position: Vector3,
     pub color: Vector3,
     pub light_type: LightType,
-    pub billboard: BillboardId,
 }
 
 impl Light {
     pub fn new<P: Into<Vector3>, C: Into<Vector3>>(
         position: P,
         color: C,
-        billboard: BillboardId,
     ) -> Self {
         Light {
             position: position.into(),
             color: color.into(),
             light_type: LightType::Point,
-            billboard,
         }
     }
 }
