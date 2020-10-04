@@ -282,7 +282,7 @@ impl State {
 
         // Update the light
         {
-            for (i, light) in self.context.lights.lights.iter_mut().enumerate() {
+            for light in self.context.lights.lights.iter_mut() {
                 if let Some(light) = light {
                     let old_position = light.position;
                     light.position = cgmath::Quaternion::from_axis_angle(
@@ -290,7 +290,7 @@ impl State {
                         cgmath::Deg(60.0 * dt.as_secs_f32()),
                     ) * old_position;
 
-                    let light_billboard = self.light_billboards[i].unwrap();
+                    let light_billboard = self.light_billboards[light.id].unwrap();
                     if let Some(billboard) = self.billboards.get(light_billboard) {
                         billboard.position = light.position;
                     }

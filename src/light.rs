@@ -102,7 +102,7 @@ impl Lights {
     pub fn add_light(&mut self, position: Vector3) -> Option<LightId> {
         let index = self.lights.iter().position(|l| l.is_none());
         match index {
-            Some(i) => self.lights[i] = Some(Light::new(position, (1.0, 1.0, 1.0))),
+            Some(i) => self.lights[i] = Some(Light::new(i, position, (1.0, 1.0, 1.0))),
             None => eprintln!("Unable to add light - max count reached"),
         }
         index
@@ -130,17 +130,20 @@ impl Lights {
 
 #[derive(Copy, Clone)]
 pub struct Light {
+    pub id: LightId,
     pub position: Vector3,
     pub color: Vector3,
     pub light_type: LightType,
 }
 
 impl Light {
-    pub fn new<P: Into<Vector3>, C: Into<Vector3>>(
+    fn new<P: Into<Vector3>, C: Into<Vector3>>(
+        id: LightId,
         position: P,
         color: C,
     ) -> Self {
         Light {
+            id,
             position: position.into(),
             color: color.into(),
             light_type: LightType::Point,
