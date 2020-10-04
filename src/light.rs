@@ -4,10 +4,13 @@ use crate::prelude::*;
 use crate::shadow;
 use wgpu::util::DeviceExt;
 
+/// The maximum number of lights supported at once
 pub const MAX_LIGHTS: usize = 2;
 
 pub struct Lights {
     pub lights: [Option<Light>; MAX_LIGHTS],
+
+    /// Cubemap textures for each light in the world
     pub shadow_textures: [wgpu::Texture; MAX_LIGHTS],
 
     pub config: LightConfig,

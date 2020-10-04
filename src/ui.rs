@@ -69,6 +69,7 @@ impl DebugUi {
             .map(|_| create_texture(&context.device, &mut renderer))
             .collect();
 
+        // Create a texture views for each face of each shadow cubemap texture
         let shadow_texture_views: Vec<wgpu::TextureView> = shadow_textures
             .iter()
             .flat_map(|tex| {
@@ -124,7 +125,6 @@ impl DebugUi {
         }
     }
 
-    // TODO store reference to window in struct?
     pub fn handle_event<T>(
         &mut self,
         window: &winit::window::Window,
@@ -141,10 +141,25 @@ impl DebugUi {
         encoder: &mut wgpu::CommandEncoder,
         debug_pass: &debug::DebugPass,
     ) {
-        for (i, tex) in self.shadow_textures().enumerate() {
-            let shadow_bind_group = &self.shadow_bind_groups[i];
-            debug_pass.render(encoder, &tex.view, &shadow_bind_group);
+        // Render each shadow texture into the imgui textures
+        {
+            let imgui_shadow_textures = self
+                .shadow_map_ids
+                .iter()
+                .map(|id| self.renderer.textures.get(*id).unwrap());
+
+            for (i, tex) in imgui_shadow_textures.enumerate() {
+                let shadow_bind_group = &self.shadow_bind_groups[i];
+                debug_pass.render(encoder, &tex.view, &shadow_bind_group);
+            }
         }
+
+        // Create an imgui Image widget for each shadow texture
+        let images: Vec<_> = self
+            .shadow_map_ids
+            .iter()
+            .map(|id| imgui::Image::new(*id, [128.0, 128.0]))
+            .collect();
 
         self.platform
             .prepare_frame(self.context.io_mut(), &context.window)
@@ -152,12 +167,7 @@ impl DebugUi {
 
         let ui = self.context.frame();
 
-        let images: Vec<_> = self
-            .shadow_map_ids
-            .iter()
-            .map(|id| imgui::Image::new(*id, [128.0, 128.0]))
-            .collect();
-
+        // Render camera window
         {
             let camera_pos = self.camera_pos;
             let window = imgui::Window::new(imgui::im_str!("Game world"));
@@ -172,6 +182,7 @@ impl DebugUi {
                 });
         }
 
+        // Render shadow debug window
         {
             let window = imgui::Window::new(imgui::im_str!("Shadow Debug"));
             let mut shadows_enabled = self.shadows_enabled;
@@ -191,9 +202,7 @@ impl DebugUi {
                         let is_expanded = header.build(&ui);
 
                         let style_token =
-                            ui.push_style_vars(&[
-                                imgui::StyleVar::ItemSpacing([4.0, 4.0]),
-                            ]);
+                            ui.push_style_vars(&[imgui::StyleVar::ItemSpacing([4.0, 4.0])]);
                         if is_expanded {
                             ui.columns(3, imgui::im_str!("Columnz"), false);
                             for img in imgs {
@@ -229,12 +238,6 @@ impl DebugUi {
         self.renderer
             .render(ui.render(), &context.queue, &context.device, &mut rpass)
             .expect("Rendering failed");
-    }
-
-    fn shadow_textures<'a>(&'a self) -> impl Iterator<Item = &'a imgui_wgpu::Texture> + 'a {
-        self.shadow_map_ids
-            .iter()
-            .map(move |id| self.renderer.textures.get(*id).unwrap())
     }
 }
 
